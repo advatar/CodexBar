@@ -1,0 +1,3 @@
+[submodule "thepiggybank"]
+	path = thepiggybank
+	url = git@github.com:advatar/thepiggybank.git

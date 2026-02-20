@@ -4,7 +4,7 @@ import Foundation
 extension CodexBarCLI {
     static func usageHelp(version: String) -> String {
         """
-        CodexBar \(version)
+        TeamTokenBar \(version)
 
         Usage:
           codexbar usage [--format text|json]
@@ -19,7 +19,7 @@ extension CodexBarCLI {
         Description:
           Print usage from enabled providers as text (default) or JSON. Honors your in-app toggles.
           Output format: use --json (or --format json) for JSON on stdout; use --json-output for JSON logs on stderr.
-          When --source is auto/web (macOS only), CodexBar uses browser cookies to fetch web-backed data:
+          When --source is auto/web (macOS only), TeamTokenBar uses browser cookies to fetch web-backed data:
           - Codex: OpenAI web dashboard (usage limits, credits remaining, code review remaining, usage breakdown).
             Auto falls back to Codex CLI only when cookies are missing.
           - Claude: claude.ai API.
@@ -49,7 +49,7 @@ extension CodexBarCLI {
 
     static func costHelp(version: String) -> String {
         """
-        CodexBar \(version)
+        TeamTokenBar \(version)
 
         Usage:
           codexbar cost [--format text|json]
@@ -71,7 +71,7 @@ extension CodexBarCLI {
 
     static func configHelp(version: String) -> String {
         """
-        CodexBar \(version)
+        TeamTokenBar \(version)
 
         Usage:
           codexbar config validate [--format text|json]
@@ -88,7 +88,7 @@ extension CodexBarCLI {
                              [--pretty]
 
         Description:
-          Validate or print the CodexBar config file (default: validate).
+          Validate or print the TeamTokenBar config file (default: validate).
 
         Examples:
           codexbar config validate --format json --pretty
@@ -98,7 +98,7 @@ extension CodexBarCLI {
 
     static func rootHelp(version: String) -> String {
         """
-        CodexBar \(version)
+        TeamTokenBar \(version)
 
         Usage:
           codexbar [--format text|json]

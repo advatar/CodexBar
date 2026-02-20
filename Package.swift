@@ -12,7 +12,7 @@ let sweetCookieKitDependency: Package.Dependency =
     : .package(url: "https://github.com/steipete/SweetCookieKit", from: "0.4.0")
 
 let package = Package(
-    name: "CodexBar",
+    name: "TeamTokenBar",
     platforms: [
         .macOS(.v14),
     ],

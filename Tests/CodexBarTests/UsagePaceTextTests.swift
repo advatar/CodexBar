@@ -17,7 +17,7 @@ struct UsagePaceTextTests {
         let detail = UsagePaceText.weeklyDetail(provider: .codex, window: window, now: now)
 
         #expect(detail?.leftLabel == "7% in deficit")
-        #expect(detail?.rightLabel == "Runs out in 3d")
+        #expect(detail?.rightLabel == "Runs out in 3d · refresh in 4d · without for 1d 0h")
     }
 
     @Test
@@ -46,7 +46,7 @@ struct UsagePaceTextTests {
 
         let summary = UsagePaceText.weeklySummary(provider: .codex, window: window, now: now)
 
-        #expect(summary == "Pace: 7% in deficit · Runs out in 3d")
+        #expect(summary == "Pace: 7% in deficit · Runs out in 3d · refresh in 4d · without for 1d 0h")
     }
 
     @Test

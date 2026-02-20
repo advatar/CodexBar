@@ -3,6 +3,7 @@ import SwiftUI
 
 enum PreferencesTab: String, Hashable {
     case general
+    case team
     case providers
     case display
     case advanced
@@ -36,6 +37,10 @@ struct PreferencesView: View {
             GeneralPane(settings: self.settings, store: self.store)
                 .tabItem { Label("General", systemImage: "gearshape") }
                 .tag(PreferencesTab.general)
+
+            TeamPane(settings: self.settings, store: self.store)
+                .tabItem { Label("Team", systemImage: "person.3") }
+                .tag(PreferencesTab.team)
 
             ProvidersPane(settings: self.settings, store: self.store)
                 .tabItem { Label("Providers", systemImage: "square.grid.2x2") }

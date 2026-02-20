@@ -333,19 +333,23 @@ private struct MetricRow: View {
                     }
                 }
                 if self.metric.detailLeftText != nil || self.metric.detailRightText != nil {
-                    HStack(alignment: .firstTextBaseline) {
+                    HStack(alignment: .top, spacing: 8) {
                         if let detailLeft = self.metric.detailLeftText {
                             Text(detailLeft)
                                 .font(.footnote)
                                 .foregroundStyle(MenuHighlightStyle.primary(self.isHighlighted))
                                 .lineLimit(1)
+                                .fixedSize(horizontal: true, vertical: false)
+                                .layoutPriority(2)
                         }
-                        Spacer()
+                        Spacer(minLength: 8)
                         if let detailRight = self.metric.detailRightText {
                             Text(detailRight)
                                 .font(.footnote)
                                 .foregroundStyle(MenuHighlightStyle.secondary(self.isHighlighted))
-                                .lineLimit(1)
+                                .lineLimit(3)
+                                .multilineTextAlignment(.trailing)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                     }
                 }
@@ -621,6 +625,12 @@ extension UsageMenuCardView.Model {
             isRefreshing: input.isRefreshing,
             lastError: input.lastError)
         let redacted = Self.redactedText(input: input, subtitle: subtitle)
+        let creditsHintText = redacted.creditsHintText
+            ?? Self.codexCreditsTimeEstimate(
+                provider: input.provider,
+                snapshot: input.snapshot,
+                credits: input.credits,
+                now: input.now)
         let placeholder = input.snapshot == nil && !input.isRefreshing && input.lastError == nil ? "No usage yet" : nil
 
         return UsageMenuCardView.Model(
@@ -632,7 +642,7 @@ extension UsageMenuCardView.Model {
             metrics: metrics,
             creditsText: creditsText,
             creditsRemaining: input.credits?.remaining,
-            creditsHintText: redacted.creditsHintText,
+            creditsHintText: creditsHintText,
             creditsHintCopyText: redacted.creditsHintCopyText,
             providerCost: providerCost,
             tokenUsage: tokenUsage,
@@ -888,6 +898,49 @@ extension UsageMenuCardView.Model {
         guard provider == .codex else { return nil }
         guard let error, !error.isEmpty else { return nil }
         return error
+    }
+
+    private static func codexCreditsTimeEstimate(
+        provider: UsageProvider,
+        snapshot: UsageSnapshot?,
+        credits: CreditsSnapshot?,
+        now: Date) -> String?
+    {
+        guard provider == .codex else { return nil }
+        guard let credits, credits.remaining > 0 else { return nil }
+        guard let weekly = snapshot?.secondary else { return nil }
+        guard let resetsAt = weekly.resetsAt else { return nil }
+
+        let windowMinutes = weekly.windowMinutes ?? 10080
+        guard windowMinutes > 0 else { return nil }
+        let windowSeconds = TimeInterval(windowMinutes) * 60
+        let timeUntilReset = resetsAt.timeIntervalSince(now)
+        guard timeUntilReset > 0, timeUntilReset <= windowSeconds else { return nil }
+
+        let elapsedSeconds = max(1, windowSeconds - timeUntilReset)
+        let usedPercent = min(100, max(0, weekly.usedPercent))
+        guard usedPercent > 0 else { return nil }
+
+        let creditsScale: Double = 1000
+        let consumedCreditsEquivalent = (usedPercent / 100.0) * creditsScale
+        guard consumedCreditsEquivalent > 0 else { return nil }
+
+        let creditsPerSecond = consumedCreditsEquivalent / elapsedSeconds
+        guard creditsPerSecond > 0 else { return nil }
+
+        let extraSeconds = credits.remaining / creditsPerSecond
+        guard extraSeconds.isFinite, extraSeconds > 0 else { return nil }
+
+        let duration = Self.durationLabel(seconds: extraSeconds, now: now)
+        return "At current weekly pace: ~\(duration) of extra credits."
+    }
+
+    private static func durationLabel(seconds: TimeInterval, now: Date) -> String {
+        let date = now.addingTimeInterval(seconds)
+        let countdown = UsageFormatter.resetCountdownDescription(from: date, now: now)
+        if countdown == "now" { return "now" }
+        if countdown.hasPrefix("in ") { return String(countdown.dropFirst(3)) }
+        return countdown
     }
 
     private static func tokenUsageSection(

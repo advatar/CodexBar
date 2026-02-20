@@ -6,6 +6,6 @@ extension StatusItemController {
         self.loginPhase = .idle
         self.presentLoginAlert(
             title: "Antigravity login is managed in the app",
-            message: "Open Antigravity to sign in, then refresh CodexBar.")
+            message: "Open Antigravity to sign in, then refresh TeamTokenBar.")
     }
 }

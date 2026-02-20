@@ -57,6 +57,7 @@ extension SettingsStore {
         _ = self.tokenAccountsByProvider
         _ = self.debugLoadingPattern
         _ = self.selectedMenuProvider
+        _ = self.teamReportingSettings
         _ = self.configRevision
         return 0
     }

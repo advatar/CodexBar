@@ -23,7 +23,7 @@ enum UsagePaceText {
         guard let pace = weeklyPace(provider: provider, window: window, now: now) else { return nil }
         return WeeklyDetail(
             leftLabel: Self.detailLeftLabel(for: pace),
-            rightLabel: Self.detailRightLabel(for: pace, now: now),
+            rightLabel: Self.detailRightLabel(for: pace, window: window, now: now),
             expectedUsedPercent: pace.expectedUsedPercent,
             stage: pace.stage)
     }
@@ -40,12 +40,46 @@ enum UsagePaceText {
         }
     }
 
-    private static func detailRightLabel(for pace: UsagePace, now: Date) -> String? {
+    private static func detailRightLabel(for pace: UsagePace, window: RateWindow, now: Date) -> String? {
         if pace.willLastToReset { return "Lasts until reset" }
         guard let etaSeconds = pace.etaSeconds else { return nil }
         let etaText = Self.durationText(seconds: etaSeconds, now: now)
-        if etaText == "now" { return "Runs out now" }
-        return "Runs out in \(etaText)"
+        let runsOutLabel = if etaText == "now" { "Runs out now" } else { "Runs out in \(etaText)" }
+        guard Self.isDeficitStage(pace.stage), let resetsAt = window.resetsAt else { return runsOutLabel }
+        let refreshLabel = Self.refreshCountdownLabel(resetAt: resetsAt, now: now)
+        guard let withoutLabel = Self.withoutAccessLabel(etaSeconds: etaSeconds, resetAt: resetsAt, now: now) else {
+            return "\(runsOutLabel) · \(refreshLabel)"
+        }
+        return "\(runsOutLabel) · \(refreshLabel) · \(withoutLabel)"
+    }
+
+    private static func isDeficitStage(_ stage: UsagePace.Stage) -> Bool {
+        switch stage {
+        case .slightlyAhead, .ahead, .farAhead:
+            true
+        case .onTrack, .slightlyBehind, .behind, .farBehind:
+            false
+        }
+    }
+
+    private static func refreshCountdownLabel(resetAt: Date, now: Date) -> String {
+        let text = Self.durationText(seconds: resetAt.timeIntervalSince(now), now: now)
+        if text == "now" { return "refresh now" }
+        return "refresh in \(text)"
+    }
+
+    private static func withoutAccessLabel(etaSeconds: TimeInterval, resetAt: Date, now: Date) -> String? {
+        let runOutAt = now.addingTimeInterval(etaSeconds)
+        let deficitSeconds = resetAt.timeIntervalSince(runOutAt)
+        guard deficitSeconds > 0 else { return nil }
+        return "without for \(Self.dayHourText(seconds: deficitSeconds))"
+    }
+
+    private static func dayHourText(seconds: TimeInterval) -> String {
+        let totalHours = max(1, Int((seconds / 3600).rounded(.up)))
+        let days = totalHours / 24
+        let hours = totalHours % 24
+        return "\(days)d \(hours)h"
     }
 
     private static func durationText(seconds: TimeInterval, now: Date) -> String {

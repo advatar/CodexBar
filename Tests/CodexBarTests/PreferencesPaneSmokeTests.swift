@@ -12,6 +12,7 @@ struct PreferencesPaneSmokeTests {
         let store = Self.makeUsageStore(settings: settings)
 
         _ = GeneralPane(settings: settings, store: store).body
+        _ = TeamPane(settings: settings, store: store).body
         _ = DisplayPane(settings: settings).body
         _ = AdvancedPane(settings: settings).body
         _ = ProvidersPane(settings: settings, store: store).body
@@ -37,6 +38,7 @@ struct PreferencesPaneSmokeTests {
         store._setErrorForTesting("Example error", provider: .codex)
 
         _ = GeneralPane(settings: settings, store: store).body
+        _ = TeamPane(settings: settings, store: store).body
         _ = DisplayPane(settings: settings).body
         _ = AdvancedPane(settings: settings).body
         _ = ProvidersPane(settings: settings, store: store).body

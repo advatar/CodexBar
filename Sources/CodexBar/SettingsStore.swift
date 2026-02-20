@@ -76,6 +76,8 @@ final class SettingsStore {
     @ObservationIgnored var configPersistTask: Task<Void, Never>?
     @ObservationIgnored var configLoading = false
     @ObservationIgnored var tokenAccountsLoaded = false
+    @ObservationIgnored let teamDeviceTokenStore: any TeamDeviceTokenStoring
+    @ObservationIgnored let teamAPIClient: TeamAPIClient
     var defaultsState: SettingsDefaultsState
     var configRevision: Int = 0
     var providerOrder: [UsageProvider] = []
@@ -112,7 +114,9 @@ final class SettingsStore {
             account: "amp-cookie",
             promptKind: .ampCookie),
         copilotTokenStore: any CopilotTokenStoring = KeychainCopilotTokenStore(),
-        tokenAccountStore: any ProviderTokenAccountStoring = FileTokenAccountStore())
+        tokenAccountStore: any ProviderTokenAccountStoring = FileTokenAccountStore(),
+        teamDeviceTokenStore: any TeamDeviceTokenStoring = KeychainTeamDeviceTokenStore(),
+        teamAPIClient: TeamAPIClient = TeamAPIClient())
     {
         let legacyStores = CodexBarConfigMigrator.LegacyStores(
             zaiTokenStore: zaiTokenStore,
@@ -137,6 +141,8 @@ final class SettingsStore {
         self.userDefaults = userDefaults
         self.configStore = configStore
         self.config = config
+        self.teamDeviceTokenStore = teamDeviceTokenStore
+        self.teamAPIClient = teamAPIClient
         self.configLoading = true
         self.defaultsState = Self.loadDefaultsState(userDefaults: userDefaults)
         self.updateProviderState(config: config)
@@ -216,6 +222,7 @@ extension SettingsStore {
         let switcherShowsIcons = userDefaults.object(forKey: "switcherShowsIcons") as? Bool ?? true
         let selectedMenuProviderRaw = userDefaults.string(forKey: "selectedMenuProvider")
         let providerDetectionCompleted = userDefaults.object(forKey: "providerDetectionCompleted") as? Bool ?? false
+        let teamReportingSettings = Self.decodeTeamReportingSettings(userDefaults: userDefaults)
 
         return SettingsDefaultsState(
             refreshFrequency: refreshFrequency,
@@ -246,7 +253,21 @@ extension SettingsStore {
             mergeIcons: mergeIcons,
             switcherShowsIcons: switcherShowsIcons,
             selectedMenuProviderRaw: selectedMenuProviderRaw,
-            providerDetectionCompleted: providerDetectionCompleted)
+            providerDetectionCompleted: providerDetectionCompleted,
+            teamReportingSettings: teamReportingSettings)
+    }
+
+    private static func decodeTeamReportingSettings(userDefaults: UserDefaults) -> TeamReportingSettings {
+        guard let data = userDefaults.data(forKey: "teamReportingSettings") else {
+            return TeamReportingSettings.defaultValue()
+        }
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        guard let decoded = try? decoder.decode(TeamReportingSettings.self, from: data) else {
+            return TeamReportingSettings.defaultValue()
+        }
+        return decoded
     }
 }
 

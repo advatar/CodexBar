@@ -383,15 +383,12 @@ public struct ClaudeStatusProbe: Sendable {
                 return trimmed.isEmpty ? nil : trimmed
             }
             if let folderHint {
-                return """
-                Claude CLI is waiting for a folder trust prompt (\(folderHint)). CodexBar tries to auto-accept this, \
-                but if it keeps appearing run: `cd "\(folderHint)" && claude` and choose “Yes, proceed”, then retry.
-                """
+                return "Claude CLI is waiting for a folder trust prompt (\(folderHint)). "
+                    + "TeamTokenBar tries to auto-accept this, but if it keeps appearing run: "
+                    + "`cd \"\(folderHint)\" && claude` and choose “Yes, proceed”, then retry."
             }
-            return """
-            Claude CLI is waiting for a folder trust prompt. CodexBar tries to auto-accept this, but if it keeps \
-            appearing open `claude` once, choose “Yes, proceed”, then retry.
-            """
+            return "Claude CLI is waiting for a folder trust prompt. TeamTokenBar tries to auto-accept this, "
+                + "but if it keeps appearing open `claude` once, choose “Yes, proceed”, then retry."
         }
         if lower.contains("token_expired") || lower.contains("token has expired") {
             return "Claude CLI token expired. Run `claude login` to refresh."

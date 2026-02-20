@@ -11,7 +11,7 @@ read_when:
 - Framework: Sparkle 2.8.1 via SwiftPM.
 - Updater: `SPUStandardUpdaterController` owned by `AppDelegate` (see `Sources/CodexBar/CodexbarApp.swift:1`).
 - Feed: `SUFeedURL` in Info.plist points to GitHub Releases appcast (`appcast.xml`).
-- Key: `SUPublicEDKey` set to `AGCY8w5vHirVfGGDGc8Szc5iuOqupZSh9pMj/Qs67XI=`. Keep the Ed25519 private key safe; use it when generating the appcast.
+- Key: `SUPublicEDKey` is sourced from `version.env` (`SPARKLE_PUBLIC_ED_KEY`) during packaging. Keep the Ed25519 private key safe; use it when generating the appcast.
 - UI: auto-check toggle (About) enables auto-downloads; menu only shows “Update ready, restart now?” once an update is downloaded.
 - LSUIElement: works; updater window will show when checking. App is non-sandboxed.
 - Channels: stable vs beta are served from the same appcast. Beta items are tagged with `sparkle:channel="beta"`; About → Update Channel controls `allowedChannels`.
@@ -25,5 +25,6 @@ read_when:
 ## Notes
 - HTML release notes are embedded in the appcast entry; the Sparkle update dialog should show formatted bullets (not raw tags).
 - If you change the feed host or key, update Info.plist (`SUFeedURL`, `SUPublicEDKey`) and bump the app.
+- For key rotation, run `./Scripts/rotate_sparkle_key.sh`. It generates a new keypair, exports the private key file, updates `.env`, and updates `version.env` with the new `SPARKLE_PUBLIC_ED_KEY`.
 - Auto-check toggle is persisted via Sparkle; manual “Check for Updates…” remains in About.
 - CodexBar disables Sparkle in Homebrew and unsigned builds; those installs should be updated via `brew` or reinstalling from Releases.

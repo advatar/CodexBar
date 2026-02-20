@@ -239,7 +239,7 @@ public enum AugmentStatusProbeError: LocalizedError, Sendable {
     public var errorDescription: String? {
         switch self {
         case .notLoggedIn:
-            "Not logged in to Augment. Please log in via the CodexBar menu."
+            "Not logged in to Augment. Please log in via the TeamTokenBar menu."
         case let .networkError(msg):
             "Augment API error: \(msg)"
         case let .parseFailed(msg):

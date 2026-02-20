@@ -352,6 +352,92 @@ struct MenuCardModelTests {
     }
 
     @Test
+    func codexCreditsHintShowsTimeEstimateFromWeeklyPace() throws {
+        let now = Date(timeIntervalSince1970: 0)
+        let metadata = try #require(ProviderDefaults.metadata[.codex])
+        let snapshot = UsageSnapshot(
+            primary: RateWindow(
+                usedPercent: 20,
+                windowMinutes: 300,
+                resetsAt: now.addingTimeInterval(2 * 3600),
+                resetDescription: nil),
+            secondary: RateWindow(
+                usedPercent: 50,
+                windowMinutes: 10080,
+                resetsAt: now.addingTimeInterval(4 * 24 * 3600),
+                resetDescription: nil),
+            tertiary: nil,
+            updatedAt: now)
+        let credits = CreditsSnapshot(remaining: 250, events: [], updatedAt: now)
+
+        let model = UsageMenuCardView.Model.make(.init(
+            provider: .codex,
+            metadata: metadata,
+            snapshot: snapshot,
+            credits: credits,
+            creditsError: nil,
+            dashboard: nil,
+            dashboardError: nil,
+            tokenSnapshot: nil,
+            tokenError: nil,
+            account: AccountInfo(email: nil, plan: nil),
+            isRefreshing: false,
+            lastError: nil,
+            usageBarsShowUsed: false,
+            resetTimeDisplayStyle: .countdown,
+            tokenCostUsageEnabled: false,
+            showOptionalCreditsAndExtraUsage: true,
+            hidePersonalInfo: false,
+            now: now))
+
+        #expect(model.creditsHintText == "At current weekly pace: ~1d 12h of extra credits.")
+    }
+
+    @Test
+    func codexCreditsHintPrefersDashboardErrorWhenPresent() throws {
+        let now = Date(timeIntervalSince1970: 0)
+        let metadata = try #require(ProviderDefaults.metadata[.codex])
+        let snapshot = UsageSnapshot(
+            primary: RateWindow(
+                usedPercent: 20,
+                windowMinutes: 300,
+                resetsAt: now.addingTimeInterval(2 * 3600),
+                resetDescription: nil),
+            secondary: RateWindow(
+                usedPercent: 50,
+                windowMinutes: 10080,
+                resetsAt: now.addingTimeInterval(4 * 24 * 3600),
+                resetDescription: nil),
+            tertiary: nil,
+            updatedAt: now)
+        let credits = CreditsSnapshot(remaining: 250, events: [], updatedAt: now)
+        let dashboardError = "Dashboard access issue."
+
+        let model = UsageMenuCardView.Model.make(.init(
+            provider: .codex,
+            metadata: metadata,
+            snapshot: snapshot,
+            credits: credits,
+            creditsError: nil,
+            dashboard: nil,
+            dashboardError: dashboardError,
+            tokenSnapshot: nil,
+            tokenError: nil,
+            account: AccountInfo(email: nil, plan: nil),
+            isRefreshing: false,
+            lastError: nil,
+            usageBarsShowUsed: false,
+            resetTimeDisplayStyle: .countdown,
+            tokenCostUsageEnabled: false,
+            showOptionalCreditsAndExtraUsage: true,
+            hidePersonalInfo: false,
+            now: now))
+
+        #expect(model.creditsHintText == dashboardError)
+        #expect(model.creditsHintCopyText == dashboardError)
+    }
+
+    @Test
     func hidesClaudeExtraUsageWhenDisabled() throws {
         let now = Date()
         let identity = ProviderIdentitySnapshot(

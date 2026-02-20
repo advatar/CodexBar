@@ -49,6 +49,8 @@ public enum LogCategories {
     public static let subprocess = "subprocess"
     public static let syntheticTokenStore = "synthetic-token-store"
     public static let syntheticUsage = "synthetic-usage"
+    public static let team = "team"
+    public static let teamTokenStore = "team-token-store"
     public static let terminal = "terminal"
     public static let tokenAccounts = "token-accounts"
     public static let tokenCost = "token-cost"

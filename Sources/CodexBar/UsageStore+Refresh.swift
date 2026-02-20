@@ -7,6 +7,10 @@ extension UsageStore {
         await self.performRuntimeAction(.forceSessionRefresh, for: .augment)
     }
 
+    func sendTeamReportNow() async {
+        await self.teamReporter.maybeReport(store: self, force: true)
+    }
+
     func refreshProvider(_ provider: UsageProvider, allowDisabled: Bool = false) async {
         guard let spec = self.providerSpecs[provider] else { return }
 

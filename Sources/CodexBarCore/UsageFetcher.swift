@@ -345,7 +345,7 @@ private final class CodexRPCClient: @unchecked Sendable {
         guard let resolvedExec else {
             Self.log.warning("Codex RPC binary not found", metadata: ["binary": executable])
             throw RPCWireError.startFailed(
-                "Codex CLI not found. Install with `npm i -g @openai/codex` (or bun) then relaunch CodexBar.")
+                "Codex CLI not found. Install with `npm i -g @openai/codex` (or bun) then relaunch TeamTokenBar.")
         }
         var env = ProcessInfo.processInfo.environment
         env["PATH"] = PathBuilder.effectivePATH(

@@ -402,7 +402,7 @@ public enum FactoryStatusProbeError: LocalizedError, Sendable {
     public var errorDescription: String? {
         switch self {
         case .notLoggedIn:
-            "Not logged in to Factory. Please log in via the CodexBar menu."
+            "Not logged in to Factory. Please log in via the TeamTokenBar menu."
         case let .networkError(msg):
             "Factory API error: \(msg)"
         case let .parseFailed(msg):

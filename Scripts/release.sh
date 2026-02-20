@@ -5,11 +5,13 @@ ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
 
 source "$ROOT/version.env"
+source "$ROOT/Scripts/lib/load-env.sh"
+load_dotenv_if_present "$ROOT"
 source "$HOME/Projects/agent-scripts/release/sparkle_lib.sh"
 
 APPCAST="$ROOT/appcast.xml"
-APP_NAME="CodexBar"
-ARTIFACT_PREFIX="CodexBar-"
+APP_NAME="TeamTokenBar"
+ARTIFACT_PREFIX="TeamTokenBar-"
 BUNDLE_ID="com.steipete.codexbar"
 TAG="v${MARKETING_VERSION}"
 
@@ -40,7 +42,7 @@ trap 'rm -f "$KEY_FILE" "$NOTES_FILE"' EXIT
 git tag -f "$TAG"
 git push -f origin "$TAG"
 
-gh release create "$TAG" ${APP_NAME}-${MARKETING_VERSION}.zip ${APP_NAME}-${MARKETING_VERSION}.dSYM.zip \
+gh release create "$TAG" ${APP_NAME}-${MARKETING_VERSION}.zip ${APP_NAME}-${MARKETING_VERSION}.dmg ${APP_NAME}-${MARKETING_VERSION}.dSYM.zip \
   --title "${APP_NAME} ${MARKETING_VERSION}" \
   --notes-file "$NOTES_FILE"
 

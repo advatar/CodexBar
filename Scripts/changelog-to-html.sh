@@ -55,13 +55,13 @@ markdown_to_html() {
 
 version_content=$(extract_version_section "$VERSION" "$CHANGELOG_FILE")
 if [[ -z "$version_content" ]]; then
-  echo "<h2>CodexBar $VERSION</h2>"
-  echo "<p>Latest CodexBar update.</p>"
+  echo "<h2>TeamTokenBar $VERSION</h2>"
+  echo "<p>Latest TeamTokenBar update.</p>"
   echo "<p><a href=\"https://github.com/steipete/CodexBar/blob/main/CHANGELOG.md\">View full changelog</a></p>"
   exit 0
 fi
 
-echo "<h2>CodexBar $VERSION</h2>"
+echo "<h2>TeamTokenBar $VERSION</h2>"
 
 in_list=false
 while IFS= read -r line; do

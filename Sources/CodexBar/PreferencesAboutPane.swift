@@ -49,7 +49,7 @@ struct AboutPane: View {
             }
 
             VStack(spacing: 2) {
-                Text("CodexBar")
+                Text("TeamTokenBar")
                     .font(.title3).bold()
                 Text("Version \(self.versionString)")
                     .foregroundStyle(.secondary)

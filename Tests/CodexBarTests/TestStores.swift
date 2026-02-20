@@ -98,6 +98,22 @@ final class InMemoryCopilotTokenStore: CopilotTokenStoring, @unchecked Sendable 
     }
 }
 
+final class InMemoryTeamDeviceTokenStore: TeamDeviceTokenStoring, @unchecked Sendable {
+    var tokensByDeviceID: [String: String] = [:]
+
+    func loadToken(deviceID: String) throws -> String? {
+        self.tokensByDeviceID[deviceID]
+    }
+
+    func storeToken(_ token: String?, deviceID: String) throws {
+        if let token {
+            self.tokensByDeviceID[deviceID] = token
+        } else {
+            self.tokensByDeviceID.removeValue(forKey: deviceID)
+        }
+    }
+}
+
 final class InMemoryTokenAccountStore: ProviderTokenAccountStoring, @unchecked Sendable {
     var accounts: [UsageProvider: ProviderTokenAccountData] = [:]
     private let fileURL: URL

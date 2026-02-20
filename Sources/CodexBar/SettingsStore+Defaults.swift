@@ -285,6 +285,20 @@ extension SettingsStore {
         }
     }
 
+    var teamReportingSettings: TeamReportingSettings {
+        get { self.defaultsState.teamReportingSettings }
+        set {
+            self.defaultsState.teamReportingSettings = newValue
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            if let data = try? encoder.encode(newValue) {
+                self.userDefaults.set(data, forKey: "teamReportingSettings")
+            } else {
+                self.userDefaults.removeObject(forKey: "teamReportingSettings")
+            }
+        }
+    }
+
     var debugLoadingPattern: LoadingPattern? {
         get { self.debugLoadingPatternRaw.flatMap(LoadingPattern.init(rawValue:)) }
         set { self.debugLoadingPatternRaw = newValue?.rawValue }

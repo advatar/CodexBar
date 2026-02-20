@@ -48,7 +48,7 @@ struct AdvancedPane: View {
                                 .lineLimit(2)
                         }
                     }
-                    Text("Symlink CodexBarCLI to /usr/local/bin and /opt/homebrew/bin as codexbar.")
+                    Text("Symlink the TeamTokenBar CLI helper to /usr/local/bin and /opt/homebrew/bin as codexbar.")
                         .font(.footnote)
                         .foregroundStyle(.tertiary)
                 }
@@ -105,7 +105,7 @@ extension AdvancedPane {
         let helperURL = Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/CodexBarCLI")
         let fm = FileManager.default
         guard fm.fileExists(atPath: helperURL.path) else {
-            self.cliStatus = "CodexBarCLI not found in app bundle."
+            self.cliStatus = "TeamTokenBar CLI helper not found in app bundle."
             return
         }
 

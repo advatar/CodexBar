@@ -1,13 +1,16 @@
 #!/usr/bin/env bash
-# Reset CodexBar: kill running instances, build, package, relaunch, verify.
+# Reset TeamTokenBar: kill running instances, build, package, relaunch, verify.
 
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-APP_BUNDLE="${ROOT_DIR}/CodexBar.app"
-APP_PROCESS_PATTERN="CodexBar.app/Contents/MacOS/CodexBar"
+APP_BUNDLE="${ROOT_DIR}/TeamTokenBar.app"
+APP_PROCESS_PATTERN="TeamTokenBar.app/Contents/MacOS/CodexBar"
+LEGACY_APP_PROCESS_PATTERN="CodexBar.app/Contents/MacOS/CodexBar"
 DEBUG_PROCESS_PATTERN="${ROOT_DIR}/.build/debug/CodexBar"
 RELEASE_PROCESS_PATTERN="${ROOT_DIR}/.build/release/CodexBar"
+DERIVED_DATA_PROCESS_PATTERN="/DerivedData/.*/CodexBar"
+DEBUGSERVER_PROCESS_PATTERN="debugserver .*CodexBar"
 LOCK_KEY="$(printf '%s' "${ROOT_DIR}" | shasum -a 256 | cut -c1-8)"
 LOCK_DIR="${TMPDIR:-/tmp}/codexbar-compile-and-run-${LOCK_KEY}"
 LOCK_PID_FILE="${LOCK_DIR}/pid"
@@ -104,7 +107,7 @@ acquire_lock() {
 trap cleanup EXIT INT TERM
 
 kill_claude_probes() {
-  # CodexBar spawns `claude /usage` + `/status` in a PTY; if we kill the app mid-probe we can orphan them.
+  # TeamTokenBar spawns `claude /usage` + `/status` in a PTY; if we kill the app mid-probe we can orphan them.
   pkill -f "claude (/status|/usage) --allowed-tools" 2>/dev/null || true
   sleep 0.2
   pkill -9 -f "claude (/status|/usage) --allowed-tools" 2>/dev/null || true
@@ -113,16 +116,22 @@ kill_claude_probes() {
 kill_all_codexbar() {
   is_running() {
     pgrep -f "${APP_PROCESS_PATTERN}" >/dev/null 2>&1 \
+      || pgrep -f "${LEGACY_APP_PROCESS_PATTERN}" >/dev/null 2>&1 \
       || pgrep -f "${DEBUG_PROCESS_PATTERN}" >/dev/null 2>&1 \
       || pgrep -f "${RELEASE_PROCESS_PATTERN}" >/dev/null 2>&1 \
+      || pgrep -f "${DERIVED_DATA_PROCESS_PATTERN}" >/dev/null 2>&1 \
+      || pgrep -f "${DEBUGSERVER_PROCESS_PATTERN}" >/dev/null 2>&1 \
       || pgrep -x "CodexBar" >/dev/null 2>&1
   }
 
   # Phase 1: request termination (give the app time to exit cleanly).
   for _ in {1..25}; do
     pkill -f "${APP_PROCESS_PATTERN}" 2>/dev/null || true
+    pkill -f "${LEGACY_APP_PROCESS_PATTERN}" 2>/dev/null || true
     pkill -f "${DEBUG_PROCESS_PATTERN}" 2>/dev/null || true
     pkill -f "${RELEASE_PROCESS_PATTERN}" 2>/dev/null || true
+    pkill -f "${DERIVED_DATA_PROCESS_PATTERN}" 2>/dev/null || true
+    pkill -f "${DEBUGSERVER_PROCESS_PATTERN}" 2>/dev/null || true
     pkill -x "CodexBar" 2>/dev/null || true
     if ! is_running; then
       return 0
@@ -132,8 +141,11 @@ kill_all_codexbar() {
 
   # Phase 2: force kill any stragglers (avoids `open -n` creating multiple instances).
   pkill -9 -f "${APP_PROCESS_PATTERN}" 2>/dev/null || true
+  pkill -9 -f "${LEGACY_APP_PROCESS_PATTERN}" 2>/dev/null || true
   pkill -9 -f "${DEBUG_PROCESS_PATTERN}" 2>/dev/null || true
   pkill -9 -f "${RELEASE_PROCESS_PATTERN}" 2>/dev/null || true
+  pkill -9 -f "${DERIVED_DATA_PROCESS_PATTERN}" 2>/dev/null || true
+  pkill -9 -f "${DEBUGSERVER_PROCESS_PATTERN}" 2>/dev/null || true
   pkill -9 -x "CodexBar" 2>/dev/null || true
 
   for _ in {1..25}; do
@@ -143,7 +155,7 @@ kill_all_codexbar() {
     sleep 0.2
   done
 
-  fail "Failed to kill all CodexBar instances."
+  fail "Failed to kill all TeamTokenBar instances."
 }
 
 # 1) Ensure a single runner instance.
@@ -172,8 +184,8 @@ fi
 
 acquire_lock
 
-# 2) Kill all running CodexBar instances (debug, release, bundled).
-log "==> Killing existing CodexBar instances"
+# 2) Kill all running TeamTokenBar instances (debug, release, bundled).
+log "==> Killing existing TeamTokenBar instances"
 kill_all_codexbar
 kill_claude_probes
 
@@ -221,7 +233,7 @@ fi
 # 5) Verify the app stays up for at least a moment (launch can be >1s on some systems).
 for _ in {1..10}; do
   if pgrep -f "${APP_PROCESS_PATTERN}" >/dev/null 2>&1; then
-    log "OK: CodexBar is running."
+    log "OK: TeamTokenBar is running."
     exit 0
   fi
   sleep 0.4

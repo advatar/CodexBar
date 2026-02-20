@@ -17,7 +17,7 @@ struct GeneralPane: View {
                         .textCase(.uppercase)
                     PreferenceToggleRow(
                         title: "Start at Login",
-                        subtitle: "Automatically opens CodexBar when you start your Mac.",
+                        subtitle: "Automatically opens TeamTokenBar when you start your Mac.",
                         binding: self.$settings.launchAtLogin)
                 }
 
@@ -66,7 +66,7 @@ struct GeneralPane: View {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("Refresh cadence")
                                     .font(.body)
-                                Text("How often CodexBar polls providers in the background.")
+                                Text("How often TeamTokenBar polls providers in the background.")
                                     .font(.footnote)
                                     .foregroundStyle(.tertiary)
                             }
@@ -103,7 +103,7 @@ struct GeneralPane: View {
                 SettingsSection(contentSpacing: 12) {
                     HStack {
                         Spacer()
-                        Button("Quit CodexBar") { NSApp.terminate(nil) }
+                        Button("Quit TeamTokenBar") { NSApp.terminate(nil) }
                             .buttonStyle(.borderedProminent)
                             .controlSize(.large)
                     }

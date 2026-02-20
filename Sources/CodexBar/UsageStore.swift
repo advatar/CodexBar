@@ -51,6 +51,7 @@ extension UsageStore {
             _ = self.settings.selectedMenuProvider
             _ = self.settings.debugLoadingPattern
             _ = self.settings.debugKeepCLISessionsAlive
+            _ = self.settings.teamReportingSettings
         } onChange: { [weak self] in
             Task { @MainActor [weak self] in
                 guard let self else { return }
@@ -187,6 +188,7 @@ final class UsageStore {
     @ObservationIgnored var providerSpecs: [UsageProvider: ProviderSpec] = [:]
     @ObservationIgnored let providerMetadata: [UsageProvider: ProviderMetadata]
     @ObservationIgnored var providerRuntimes: [UsageProvider: any ProviderRuntime] = [:]
+    @ObservationIgnored let teamReporter: TeamReporter
     @ObservationIgnored private var timerTask: Task<Void, Never>?
     @ObservationIgnored private var tokenTimerTask: Task<Void, Never>?
     @ObservationIgnored private var tokenRefreshSequenceTask: Task<Void, Never>?
@@ -204,7 +206,8 @@ final class UsageStore {
         costUsageFetcher: CostUsageFetcher = CostUsageFetcher(),
         settings: SettingsStore,
         registry: ProviderRegistry = .shared,
-        sessionQuotaNotifier: SessionQuotaNotifier = SessionQuotaNotifier())
+        sessionQuotaNotifier: SessionQuotaNotifier = SessionQuotaNotifier(),
+        teamReporter: TeamReporter = TeamReporter())
     {
         self.codexFetcher = fetcher
         self.browserDetection = browserDetection
@@ -213,6 +216,7 @@ final class UsageStore {
         self.settings = settings
         self.registry = registry
         self.sessionQuotaNotifier = sessionQuotaNotifier
+        self.teamReporter = teamReporter
         self.providerMetadata = registry.metadata
         self
             .failureGates = Dictionary(
@@ -463,6 +467,8 @@ final class UsageStore {
             }
 
             self.persistWidgetSnapshot(reason: "refresh")
+
+            await self.teamReporter.maybeReport(store: self)
         }
     }
 
@@ -666,6 +672,14 @@ final class UsageStore {
 extension UsageStore {
     private static let openAIWebRefreshMultiplier: TimeInterval = 5
 
+    nonisolated static func shouldAttemptAutomaticOpenAICookieImport(
+        interaction: ProviderInteraction,
+        hasCachedCookieHeader: Bool) -> Bool
+    {
+        if interaction == .userInitiated { return true }
+        return hasCachedCookieHeader
+    }
+
     private func openAIWebRefreshIntervalSeconds() -> TimeInterval {
         let base = max(self.settings.refreshFrequency.seconds ?? 0, 120)
         return base * Self.openAIWebRefreshMultiplier
@@ -679,7 +693,11 @@ extension UsageStore {
         if let lastUpdatedAt, now.timeIntervalSince(lastUpdatedAt) < refreshInterval { return }
         let stamp = now.formatted(date: .abbreviated, time: .shortened)
         self.logOpenAIWeb("[\(stamp)] OpenAI web refresh request: \(reason)")
-        Task { await self.refreshOpenAIDashboardIfNeeded(force: true) }
+        Task {
+            await ProviderInteractionContext.$current.withValue(.userInitiated) {
+                await self.refreshOpenAIDashboardIfNeeded(force: true)
+            }
+        }
     }
 
     private func applyOpenAIDashboard(_ dash: OpenAIDashboardSnapshot, targetEmail: String?) async {
@@ -898,16 +916,19 @@ extension UsageStore {
     }
 
     func importOpenAIDashboardBrowserCookiesNow() async {
-        self.resetOpenAIWebDebugLog(context: "manual import")
-        let targetEmail = self.codexAccountEmailForOpenAIDashboard()
-        _ = await self.importOpenAIDashboardCookiesIfNeeded(targetEmail: targetEmail, force: true)
-        await self.refreshOpenAIDashboardIfNeeded(force: true)
+        await ProviderInteractionContext.$current.withValue(.userInitiated) {
+            self.resetOpenAIWebDebugLog(context: "manual import")
+            let targetEmail = self.codexAccountEmailForOpenAIDashboard()
+            _ = await self.importOpenAIDashboardCookiesIfNeeded(targetEmail: targetEmail, force: true)
+            await self.refreshOpenAIDashboardIfNeeded(force: true)
+        }
     }
 
     private func importOpenAIDashboardCookiesIfNeeded(targetEmail: String?, force: Bool) async -> String? {
         let normalizedTarget = targetEmail?.trimmingCharacters(in: .whitespacesAndNewlines)
         let allowAnyAccount = normalizedTarget == nil || normalizedTarget?.isEmpty == true
         let cookieSource = self.settings.codexCookieSource
+        if self.shouldDeferOpenAIDashboardCookieImport(cookieSource: cookieSource) { return normalizedTarget }
 
         let now = Date()
         let lastEmail = self.lastOpenAIDashboardCookieImportEmail
@@ -1048,6 +1069,25 @@ extension UsageStore {
             }
         }
         return nil
+    }
+
+    private func shouldDeferOpenAIDashboardCookieImport(cookieSource: ProviderCookieSource) -> Bool {
+        guard cookieSource == .auto else { return false }
+        let interaction = ProviderInteractionContext.current
+        let hasCachedCookieHeader = CookieHeaderCache.load(provider: .codex) != nil
+        let allowed = Self.shouldAttemptAutomaticOpenAICookieImport(
+            interaction: interaction,
+            hasCachedCookieHeader: hasCachedCookieHeader)
+        guard !allowed else { return false }
+
+        let stamp = Date().formatted(date: .abbreviated, time: .shortened)
+        self.logOpenAIWeb(
+            "[\(stamp)] import skipped (background refresh without cached header)")
+        if self.openAIDashboardCookieImportStatus == nil {
+            self.openAIDashboardCookieImportStatus =
+                "OpenAI cookie import is deferred during background refresh. Open the menu to retry."
+        }
+        return true
     }
 
     private func resetOpenAIWebDebugLog(context: String) {
