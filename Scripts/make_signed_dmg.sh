@@ -14,6 +14,7 @@ Usage: ./Scripts/make_signed_dmg.sh [output-name.dmg]
 
 Builds TeamTokenBar with Developer ID signing + notarization and produces a notarized DMG.
 This wraps ./Scripts/sign-and-notarize.sh.
+Also updates the download URL in thepiggybank to the current signed DMG release URL.
 
 Options:
   output-name.dmg   Optional output DMG name. Defaults to TeamTokenBar-<version>.dmg
@@ -24,6 +25,7 @@ Environment:
   APP_STORE_CONNECT_ISSUER_ID
   SPARKLE_PRIVATE_KEY_FILE
   ARCHES            Optional architectures override (example: "arm64 x86_64")
+  SKIP_PIGGYBANK_UPDATE=1  Skip updating thepiggybank download URL
 EOF
   exit 0
 fi

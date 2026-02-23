@@ -176,14 +176,118 @@ public struct TeamUsageReportPayload: Codable, Sendable, Equatable {
     }
 
     public struct CostPayload: Codable, Sendable, Equatable {
+        public struct CountBreakdown: Codable, Sendable, Equatable {
+            public let name: String
+            public let count: Int
+
+            public init(name: String, count: Int) {
+                self.name = name
+                self.count = count
+            }
+        }
+
+        public struct Security: Codable, Sendable, Equatable {
+            public let approvalPolicies: [CountBreakdown]?
+            public let sandboxModes: [CountBreakdown]?
+            public let riskySkills: [CountBreakdown]?
+            public let forbiddenSkills: [CountBreakdown]?
+
+            public init(
+                approvalPolicies: [CountBreakdown]?,
+                sandboxModes: [CountBreakdown]?,
+                riskySkills: [CountBreakdown]?,
+                forbiddenSkills: [CountBreakdown]?)
+            {
+                self.approvalPolicies = approvalPolicies
+                self.sandboxModes = sandboxModes
+                self.riskySkills = riskySkills
+                self.forbiddenSkills = forbiddenSkills
+            }
+        }
+
+        public struct Thinking: Codable, Sendable, Equatable {
+            public let reasoningOutputTokens: Int?
+            public let effortLevels: [CountBreakdown]?
+
+            public init(reasoningOutputTokens: Int?, effortLevels: [CountBreakdown]?) {
+                self.reasoningOutputTokens = reasoningOutputTokens
+                self.effortLevels = effortLevels
+            }
+        }
+
+        public struct ModelStats: Codable, Sendable, Equatable {
+            public struct ModelUsage: Codable, Sendable, Equatable {
+                public let modelName: String
+                public let inputTokens: Int?
+                public let outputTokens: Int?
+                public let cacheReadTokens: Int?
+                public let cacheCreationTokens: Int?
+                public let reasoningOutputTokens: Int?
+                public let totalTokens: Int
+                public let totalCost: Double
+                public let activeDays: Int
+
+                public init(
+                    modelName: String,
+                    inputTokens: Int?,
+                    outputTokens: Int?,
+                    cacheReadTokens: Int?,
+                    cacheCreationTokens: Int?,
+                    reasoningOutputTokens: Int?,
+                    totalTokens: Int,
+                    totalCost: Double,
+                    activeDays: Int)
+                {
+                    self.modelName = modelName
+                    self.inputTokens = inputTokens
+                    self.outputTokens = outputTokens
+                    self.cacheReadTokens = cacheReadTokens
+                    self.cacheCreationTokens = cacheCreationTokens
+                    self.reasoningOutputTokens = reasoningOutputTokens
+                    self.totalTokens = totalTokens
+                    self.totalCost = totalCost
+                    self.activeDays = activeDays
+                }
+            }
+
+            public let modelsUsed: Int
+            public let models: [ModelUsage]
+
+            public init(modelsUsed: Int, models: [ModelUsage]) {
+                self.modelsUsed = modelsUsed
+                self.models = models
+            }
+        }
+
         public struct CostDailyEntry: Codable, Sendable, Equatable {
             public struct ModelBreakdown: Codable, Sendable, Equatable {
                 public let modelName: String
                 public let cost: Double
+                public let inputTokens: Int?
+                public let outputTokens: Int?
+                public let cacheReadTokens: Int?
+                public let cacheCreationTokens: Int?
+                public let reasoningOutputTokens: Int?
+                public let totalTokens: Int?
 
-                public init(modelName: String, cost: Double) {
+                public init(
+                    modelName: String,
+                    cost: Double,
+                    inputTokens: Int?,
+                    outputTokens: Int?,
+                    cacheReadTokens: Int?,
+                    cacheCreationTokens: Int?,
+                    reasoningOutputTokens: Int?,
+                    totalTokens: Int?)
+                {
                     self.modelName = modelName
                     self.cost = cost
+                    self.inputTokens = inputTokens
+                    self.outputTokens = outputTokens
+                    self.cacheReadTokens = cacheReadTokens
+                    self.cacheCreationTokens = cacheCreationTokens
+                    self.reasoningOutputTokens = reasoningOutputTokens
+                    self.totalTokens = totalTokens
                 }
             }
 
@@ -192,10 +296,16 @@ public struct TeamUsageReportPayload: Codable, Sendable, Equatable {
             public let outputTokens: Int?
             public let cacheReadTokens: Int?
             public let cacheCreationTokens: Int?
+            public let reasoningOutputTokens: Int?
             public let totalTokens: Int
             public let totalCost: Double
             public let modelsUsed: Int?
             public let modelBreakdowns: [ModelBreakdown]?
+            public let approvalPolicies: [CountBreakdown]?
+            public let sandboxModes: [CountBreakdown]?
+            public let effortLevels: [CountBreakdown]?
+            public let riskySkills: [CountBreakdown]?
+            public let forbiddenSkills: [CountBreakdown]?
 
             public init(
                 date: String,
@@ -203,20 +313,32 @@ public struct TeamUsageReportPayload: Codable, Sendable, Equatable {
                 outputTokens: Int?,
                 cacheReadTokens: Int?,
                 cacheCreationTokens: Int?,
+                reasoningOutputTokens: Int?,
                 totalTokens: Int,
                 totalCost: Double,
                 modelsUsed: Int?,
-                modelBreakdowns: [ModelBreakdown]?)
+                modelBreakdowns: [ModelBreakdown]?,
+                approvalPolicies: [CountBreakdown]?,
+                sandboxModes: [CountBreakdown]?,
+                effortLevels: [CountBreakdown]?,
+                riskySkills: [CountBreakdown]?,
+                forbiddenSkills: [CountBreakdown]?)
             {
                 self.date = date
                 self.inputTokens = inputTokens
                 self.outputTokens = outputTokens
                 self.cacheReadTokens = cacheReadTokens
                 self.cacheCreationTokens = cacheCreationTokens
+                self.reasoningOutputTokens = reasoningOutputTokens
                 self.totalTokens = totalTokens
                 self.totalCost = totalCost
                 self.modelsUsed = modelsUsed
                 self.modelBreakdowns = modelBreakdowns
+                self.approvalPolicies = approvalPolicies
+                self.sandboxModes = sandboxModes
+                self.effortLevels = effortLevels
+                self.riskySkills = riskySkills
+                self.forbiddenSkills = forbiddenSkills
             }
         }
 
@@ -225,6 +347,7 @@ public struct TeamUsageReportPayload: Codable, Sendable, Equatable {
             public let outputTokens: Int?
             public let cacheReadTokens: Int?
             public let cacheCreationTokens: Int?
+            public let reasoningOutputTokens: Int?
             public let totalTokens: Int
             public let totalCost: Double
 
@@ -233,6 +356,7 @@ public struct TeamUsageReportPayload: Codable, Sendable, Equatable {
                 outputTokens: Int?,
                 cacheReadTokens: Int?,
                 cacheCreationTokens: Int?,
+                reasoningOutputTokens: Int?,
                 totalTokens: Int,
                 totalCost: Double)
             {
@@ -240,6 +364,7 @@ public struct TeamUsageReportPayload: Codable, Sendable, Equatable {
                 self.outputTokens = outputTokens
                 self.cacheReadTokens = cacheReadTokens
                 self.cacheCreationTokens = cacheCreationTokens
+                self.reasoningOutputTokens = reasoningOutputTokens
                 self.totalTokens = totalTokens
                 self.totalCost = totalCost
             }
@@ -254,6 +379,9 @@ public struct TeamUsageReportPayload: Codable, Sendable, Equatable {
         public let last30DaysCostUSD: Double?
         public let daily: [CostDailyEntry]?
         public let totals: CostTotals?
+        public let security: Security?
+        public let thinking: Thinking?
+        public let modelStats: ModelStats?
 
         public init(
             provider: String,
@@ -264,7 +392,10 @@ public struct TeamUsageReportPayload: Codable, Sendable, Equatable {
             last30DaysTokens: Int?,
             last30DaysCostUSD: Double?,
             daily: [CostDailyEntry]?,
-            totals: CostTotals?)
+            totals: CostTotals?,
+            security: Security?,
+            thinking: Thinking?,
+            modelStats: ModelStats?)
         {
             self.provider = provider
             self.source = source
@@ -275,6 +406,9 @@ public struct TeamUsageReportPayload: Codable, Sendable, Equatable {
             self.last30DaysCostUSD = last30DaysCostUSD
             self.daily = daily
             self.totals = totals
+            self.security = security
+            self.thinking = thinking
+            self.modelStats = modelStats
         }
     }
 
@@ -464,6 +598,9 @@ public enum TeamReportBuilder {
         provider: String) -> TeamUsageReportPayload.CostPayload
     {
         let dailyEntries = Array(snapshot.daily.prefix(366)).compactMap { Self.costDailyEntry(from: $0) }
+        let security = Self.costSecurity(from: dailyEntries)
+        let thinking = Self.costThinking(from: snapshot, dailyEntries: dailyEntries)
+        let modelStats = Self.costModelStats(from: dailyEntries)
         return TeamUsageReportPayload.CostPayload(
             provider: provider,
             source: "local",
@@ -473,7 +610,10 @@ public enum TeamReportBuilder {
             last30DaysTokens: Self.nonNegative(snapshot.last30DaysTokens),
             last30DaysCostUSD: Self.nonNegative(snapshot.last30DaysCostUSD),
             daily: dailyEntries.isEmpty ? nil : dailyEntries,
-            totals: Self.costTotals(from: snapshot, dailyEntries: dailyEntries))
+            totals: Self.costTotals(from: snapshot, dailyEntries: dailyEntries),
+            security: security,
+            thinking: thinking,
+            modelStats: modelStats)
     }
 
     private static func costDailyEntry(
@@ -485,6 +625,7 @@ public enum TeamReportBuilder {
         let outputTokens = Self.nonNegative(entry.outputTokens)
         let cacheReadTokens = Self.nonNegative(entry.cacheReadTokens)
         let cacheCreationTokens = Self.nonNegative(entry.cacheCreationTokens)
+        let reasoningOutputTokens = Self.nonNegative(entry.reasoningOutputTokens)
 
         let derivedTokens = [inputTokens, outputTokens, cacheReadTokens, cacheCreationTokens]
             .compactMap(\.self)
@@ -511,10 +652,16 @@ public enum TeamReportBuilder {
             outputTokens: outputTokens,
             cacheReadTokens: cacheReadTokens,
             cacheCreationTokens: cacheCreationTokens,
+            reasoningOutputTokens: reasoningOutputTokens,
             totalTokens: max(0, totalTokens),
             totalCost: max(0, totalCost),
             modelsUsed: modelsUsed,
-            modelBreakdowns: modelBreakdowns)
+            modelBreakdowns: modelBreakdowns,
+            approvalPolicies: Self.costCountBreakdowns(from: entry.approvalPolicyBreakdowns),
+            sandboxModes: Self.costCountBreakdowns(from: entry.sandboxModeBreakdowns),
+            effortLevels: Self.costCountBreakdowns(from: entry.effortBreakdowns),
+            riskySkills: Self.costCountBreakdowns(from: entry.riskySkillBreakdowns),
+            forbiddenSkills: Self.costCountBreakdowns(from: entry.forbiddenSkillBreakdowns))
     }
 
     private static func costModelBreakdowns(
@@ -530,9 +677,32 @@ public enum TeamReportBuilder {
                 }
                 return TeamUsageReportPayload.CostPayload.CostDailyEntry.ModelBreakdown(
                     modelName: name,
-                    cost: max(0, Self.nonNegative(breakdown.costUSD) ?? 0))
+                    cost: max(0, Self.nonNegative(breakdown.costUSD) ?? 0),
+                    inputTokens: Self.nonNegative(breakdown.inputTokens),
+                    outputTokens: Self.nonNegative(breakdown.outputTokens),
+                    cacheReadTokens: Self.nonNegative(breakdown.cacheReadTokens),
+                    cacheCreationTokens: Self.nonNegative(breakdown.cacheCreationTokens),
+                    reasoningOutputTokens: Self.nonNegative(breakdown.reasoningOutputTokens),
+                    totalTokens: Self.nonNegative(breakdown.totalTokens))
             }
 
+        return payload.isEmpty ? nil : payload
+    }
+
+    private static func costCountBreakdowns(
+        from breakdowns: [CostUsageDailyReport.CountBreakdown]?)
+        -> [TeamUsageReportPayload.CostPayload.CountBreakdown]?
+    {
+        guard let breakdowns else { return nil }
+        let payload = Array(breakdowns.prefix(200))
+            .compactMap { item -> TeamUsageReportPayload.CostPayload.CountBreakdown? in
+                guard let name = Self.normalizedString(item.name, maxLength: 128) else {
+                    return nil
+                }
+                return TeamUsageReportPayload.CostPayload.CountBreakdown(
+                    name: name,
+                    count: max(0, item.count))
+            }
         return payload.isEmpty ? nil : payload
     }
 
@@ -550,6 +720,7 @@ public enum TeamReportBuilder {
                 outputTokens: nil,
                 cacheReadTokens: nil,
                 cacheCreationTokens: nil,
+                reasoningOutputTokens: nil,
                 totalTokens: max(0, snapshot.last30DaysTokens ?? 0),
                 totalCost: max(0, snapshot.last30DaysCostUSD ?? 0))
         }
@@ -558,10 +729,12 @@ public enum TeamReportBuilder {
         var outputTokensTotal = 0
         var cacheReadTokensTotal = 0
         var cacheCreationTokensTotal = 0
+        var reasoningOutputTokensTotal = 0
         var sawInputTokens = false
         var sawOutputTokens = false
         var sawCacheReadTokens = false
         var sawCacheCreationTokens = false
+        var sawReasoningOutputTokens = false
 
         var totalTokens = 0
         var totalCost = 0.0
@@ -583,6 +756,10 @@ public enum TeamReportBuilder {
                 cacheCreationTokensTotal += cacheCreationTokens
                 sawCacheCreationTokens = true
             }
+            if let reasoningOutputTokens = entry.reasoningOutputTokens {
+                reasoningOutputTokensTotal += reasoningOutputTokens
+                sawReasoningOutputTokens = true
+            }
             totalTokens += entry.totalTokens
             totalCost += entry.totalCost
         }
@@ -592,8 +769,184 @@ public enum TeamReportBuilder {
             outputTokens: sawOutputTokens ? outputTokensTotal : nil,
             cacheReadTokens: sawCacheReadTokens ? cacheReadTokensTotal : nil,
             cacheCreationTokens: sawCacheCreationTokens ? cacheCreationTokensTotal : nil,
+            reasoningOutputTokens: sawReasoningOutputTokens ? reasoningOutputTokensTotal : nil,
             totalTokens: max(0, Self.nonNegative(snapshot.last30DaysTokens) ?? totalTokens),
             totalCost: max(0, Self.nonNegative(snapshot.last30DaysCostUSD) ?? totalCost))
+    }
+
+    private static func costSecurity(
+        from dailyEntries: [TeamUsageReportPayload.CostPayload.CostDailyEntry])
+        -> TeamUsageReportPayload.CostPayload.Security?
+    {
+        var approval: [String: Int] = [:]
+        var sandbox: [String: Int] = [:]
+        var riskySkills: [String: Int] = [:]
+        var forbiddenSkills: [String: Int] = [:]
+
+        for entry in dailyEntries {
+            Self.mergeCountBreakdowns(into: &approval, values: entry.approvalPolicies)
+            Self.mergeCountBreakdowns(into: &sandbox, values: entry.sandboxModes)
+            Self.mergeCountBreakdowns(into: &riskySkills, values: entry.riskySkills)
+            Self.mergeCountBreakdowns(into: &forbiddenSkills, values: entry.forbiddenSkills)
+        }
+
+        let approvalPayload = Self.costCountBreakdownsFromMap(approval)
+        let sandboxPayload = Self.costCountBreakdownsFromMap(sandbox)
+        let riskyPayload = Self.costCountBreakdownsFromMap(riskySkills)
+        let forbiddenPayload = Self.costCountBreakdownsFromMap(forbiddenSkills)
+        guard approvalPayload != nil || sandboxPayload != nil || riskyPayload != nil || forbiddenPayload != nil else {
+            return nil
+        }
+
+        return TeamUsageReportPayload.CostPayload.Security(
+            approvalPolicies: approvalPayload,
+            sandboxModes: sandboxPayload,
+            riskySkills: riskyPayload,
+            forbiddenSkills: forbiddenPayload)
+    }
+
+    private static func costThinking(
+        from snapshot: CostUsageTokenSnapshot,
+        dailyEntries: [TeamUsageReportPayload.CostPayload.CostDailyEntry])
+        -> TeamUsageReportPayload.CostPayload.Thinking?
+    {
+        var effortLevels: [String: Int] = [:]
+        for entry in dailyEntries {
+            Self.mergeCountBreakdowns(into: &effortLevels, values: entry.effortLevels)
+        }
+
+        let reasoningFromRows = dailyEntries.compactMap(\.reasoningOutputTokens).reduce(0, +)
+        let reasoningFromSnapshot = snapshot.daily.compactMap { Self.nonNegative($0.reasoningOutputTokens) }.reduce(
+            0,
+            +)
+        let reasoning = max(reasoningFromRows, reasoningFromSnapshot)
+        let reasoningValue = reasoning > 0 ? reasoning : nil
+        let effortPayload = Self.costCountBreakdownsFromMap(effortLevels)
+        guard reasoningValue != nil || effortPayload != nil else { return nil }
+        return TeamUsageReportPayload.CostPayload.Thinking(
+            reasoningOutputTokens: reasoningValue,
+            effortLevels: effortPayload)
+    }
+
+    private static func costModelStats(
+        from dailyEntries: [TeamUsageReportPayload.CostPayload.CostDailyEntry])
+        -> TeamUsageReportPayload.CostPayload.ModelStats?
+    {
+        struct ModelAccumulator {
+            var inputTokens = 0
+            var outputTokens = 0
+            var cacheReadTokens = 0
+            var cacheCreationTokens = 0
+            var reasoningOutputTokens = 0
+            var totalTokens = 0
+            var totalCost = 0.0
+            var activeDays: Set<String> = []
+            var sawInputTokens = false
+            var sawOutputTokens = false
+            var sawCacheReadTokens = false
+            var sawCacheCreationTokens = false
+            var sawReasoningOutputTokens = false
+        }
+
+        var models: [String: ModelAccumulator] = [:]
+
+        for entry in dailyEntries {
+            guard let breakdowns = entry.modelBreakdowns else { continue }
+            for breakdown in breakdowns {
+                guard let name = Self.normalizedString(breakdown.modelName, maxLength: 128) else { continue }
+                var model = models[name] ?? ModelAccumulator()
+                if let inputTokens = breakdown.inputTokens {
+                    model.inputTokens += max(0, inputTokens)
+                    model.sawInputTokens = true
+                }
+                if let outputTokens = breakdown.outputTokens {
+                    model.outputTokens += max(0, outputTokens)
+                    model.sawOutputTokens = true
+                }
+                if let cacheReadTokens = breakdown.cacheReadTokens {
+                    model.cacheReadTokens += max(0, cacheReadTokens)
+                    model.sawCacheReadTokens = true
+                }
+                if let cacheCreationTokens = breakdown.cacheCreationTokens {
+                    model.cacheCreationTokens += max(0, cacheCreationTokens)
+                    model.sawCacheCreationTokens = true
+                }
+                if let reasoningOutputTokens = breakdown.reasoningOutputTokens {
+                    model.reasoningOutputTokens += max(0, reasoningOutputTokens)
+                    model.sawReasoningOutputTokens = true
+                }
+
+                let derivedTokens = (breakdown.inputTokens ?? 0)
+                    + (breakdown.outputTokens ?? 0)
+                    + (breakdown.cacheReadTokens ?? 0)
+                    + (breakdown.cacheCreationTokens ?? 0)
+                let totalTokens = max(0, breakdown.totalTokens ?? derivedTokens)
+                model.totalTokens += totalTokens
+                model.totalCost += max(0, breakdown.cost)
+                model.activeDays.insert(entry.date)
+                models[name] = model
+            }
+        }
+
+        guard !models.isEmpty else { return nil }
+
+        let payload = models
+            .map { name, model in
+                TeamUsageReportPayload.CostPayload.ModelStats.ModelUsage(
+                    modelName: name,
+                    inputTokens: model.sawInputTokens ? model.inputTokens : nil,
+                    outputTokens: model.sawOutputTokens ? model.outputTokens : nil,
+                    cacheReadTokens: model.sawCacheReadTokens ? model.cacheReadTokens : nil,
+                    cacheCreationTokens: model.sawCacheCreationTokens ? model.cacheCreationTokens : nil,
+                    reasoningOutputTokens: model.sawReasoningOutputTokens ? model.reasoningOutputTokens : nil,
+                    totalTokens: model.totalTokens,
+                    totalCost: model.totalCost,
+                    activeDays: model.activeDays.count)
+            }
+            .sorted { lhs, rhs in
+                if lhs.totalTokens == rhs.totalTokens {
+                    if lhs.totalCost == rhs.totalCost {
+                        return lhs.modelName < rhs.modelName
+                    }
+                    return lhs.totalCost > rhs.totalCost
+                }
+                return lhs.totalTokens > rhs.totalTokens
+            }
+
+        return TeamUsageReportPayload.CostPayload.ModelStats(
+            modelsUsed: payload.count,
+            models: Array(payload.prefix(200)))
+    }
+
+    private static func mergeCountBreakdowns(
+        into target: inout [String: Int],
+        values: [TeamUsageReportPayload.CostPayload.CountBreakdown]?)
+    {
+        guard let values else { return }
+        for item in values {
+            guard let name = Self.normalizedString(item.name, maxLength: 128) else { continue }
+            let count = max(0, item.count)
+            if count == 0 { continue }
+            target[name] = max(0, (target[name] ?? 0) + count)
+        }
+    }
+
+    private static func costCountBreakdownsFromMap(_ values: [String: Int])
+        -> [TeamUsageReportPayload.CostPayload.CountBreakdown]?
+    {
+        let payload = values
+            .compactMap { name, count -> TeamUsageReportPayload.CostPayload.CountBreakdown? in
+                guard let normalizedName = Self.normalizedString(name, maxLength: 128) else {
+                    return nil
+                }
+                guard count > 0 else { return nil }
+                return TeamUsageReportPayload.CostPayload.CountBreakdown(name: normalizedName, count: count)
+            }
+            .sorted { lhs, rhs in
+                if lhs.count == rhs.count { return lhs.name < rhs.name }
+                return lhs.count > rhs.count
+            }
+        return payload.isEmpty ? nil : payload
     }
 
     private static func sanitizedStatus(

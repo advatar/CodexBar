@@ -1,5 +1,6 @@
 import Foundation
 
+// swiftlint:disable type_body_length
 enum CostUsageScanner {
     enum ClaudeLogProviderFilter: Sendable {
         case all
@@ -33,9 +34,13 @@ enum CostUsageScanner {
 
     struct CodexParseResult: Sendable {
         let days: [String: [String: [Int]]]
+        let codexContextDays: [String: CostUsageCodexContextDay]
         let parsedBytes: Int64
         let lastModel: String?
         let lastTotals: CostUsageCodexTotals?
+        let lastApprovalPolicy: String?
+        let lastSandboxMode: String?
+        let lastEffort: String?
         let sessionId: String?
     }
 
@@ -253,35 +258,90 @@ enum CostUsageScanner {
         return String(describing: identifier)
     }
 
+    // swiftlint:disable:next cyclomatic_complexity function_body_length
     static func parseCodexFile(
         fileURL: URL,
         range: CostUsageDayRange,
         startOffset: Int64 = 0,
         initialModel: String? = nil,
-        initialTotals: CostUsageCodexTotals? = nil) -> CodexParseResult
+        initialTotals: CostUsageCodexTotals? = nil,
+        initialApprovalPolicy: String? = nil,
+        initialSandboxMode: String? = nil,
+        initialEffort: String? = nil) -> CodexParseResult
     {
         var currentModel = initialModel
         var previousTotals = initialTotals
+        var currentApprovalPolicy = initialApprovalPolicy
+        var currentSandboxMode = initialSandboxMode
+        var currentEffort = initialEffort
         var sessionId: String?
 
         var days: [String: [String: [Int]]] = [:]
+        var codexContextDays: [String: CostUsageCodexContextDay] = [:]
+        var pendingRiskySkills: [String: Int] = [:]
+        var pendingForbiddenSkills: [String: Int] = [:]
+        var didAssignSessionSkills = false
 
-        func add(dayKey: String, model: String, input: Int, cached: Int, output: Int) {
+        struct TokenDelta {
+            let input: Int
+            let cached: Int
+            let output: Int
+            let reasoningOutput: Int
+        }
+
+        func add(dayKey: String, model: String, delta: TokenDelta) {
             guard CostUsageDayRange.isInRange(dayKey: dayKey, since: range.scanSinceKey, until: range.scanUntilKey)
             else { return }
             let normModel = CostUsagePricing.normalizeCodexModel(model)
 
             var dayModels = days[dayKey] ?? [:]
-            var packed = dayModels[normModel] ?? [0, 0, 0]
-            packed[0] = (packed[safe: 0] ?? 0) + input
-            packed[1] = (packed[safe: 1] ?? 0) + cached
-            packed[2] = (packed[safe: 2] ?? 0) + output
+            var packed = dayModels[normModel] ?? [0, 0, 0, 0]
+            packed[0] = (packed[safe: 0] ?? 0) + delta.input
+            packed[1] = (packed[safe: 1] ?? 0) + delta.cached
+            packed[2] = (packed[safe: 2] ?? 0) + delta.output
+            packed[3] = (packed[safe: 3] ?? 0) + delta.reasoningOutput
             dayModels[normModel] = packed
             days[dayKey] = dayModels
         }
 
+        func increment(_ map: inout [String: Int], key: String?) {
+            guard let key = Self.normalizedContextLabel(key) else { return }
+            map[key] = max(0, (map[key] ?? 0) + 1)
+        }
+
+        func addContext(dayKey: String, approvalPolicy: String?, sandboxMode: String?, effort: String?) {
+            guard CostUsageDayRange.isInRange(dayKey: dayKey, since: range.scanSinceKey, until: range.scanUntilKey)
+            else { return }
+            var context = codexContextDays[dayKey] ?? CostUsageCodexContextDay()
+            increment(&context.approvalPolicies, key: approvalPolicy)
+            increment(&context.sandboxModes, key: sandboxMode)
+            increment(&context.effortLevels, key: effort)
+            if context.isEmpty {
+                codexContextDays.removeValue(forKey: dayKey)
+            } else {
+                codexContextDays[dayKey] = context
+            }
+        }
+
+        func assignSessionSkillsIfNeeded(dayKey: String) {
+            guard !didAssignSessionSkills else { return }
+            guard !pendingRiskySkills.isEmpty || !pendingForbiddenSkills.isEmpty else { return }
+            guard CostUsageDayRange.isInRange(dayKey: dayKey, since: range.scanSinceKey, until: range.scanUntilKey)
+            else { return }
+
+            var context = codexContextDays[dayKey] ?? CostUsageCodexContextDay()
+            for (skill, count) in pendingRiskySkills {
+                context.riskySkills[skill] = max(0, (context.riskySkills[skill] ?? 0) + count)
+            }
+            for (skill, count) in pendingForbiddenSkills {
+                context.forbiddenSkills[skill] = max(0, (context.forbiddenSkills[skill] ?? 0) + count)
+            }
+            codexContextDays[dayKey] = context
+            didAssignSessionSkills = true
+        }
+
         let maxLineBytes = 256 * 1024
-        let prefixBytes = 32 * 1024
+        let prefixBytes = maxLineBytes
 
         let parsedBytes = (try? CostUsageJsonl.scan(
             fileURL: fileURL,
@@ -308,14 +368,33 @@ enum CostUsageScanner {
                 else { return }
 
                 if type == "session_meta" {
+                    let payload = obj["payload"] as? [String: Any]
                     if sessionId == nil {
-                        let payload = obj["payload"] as? [String: Any]
                         sessionId = payload?["session_id"] as? String
                             ?? payload?["sessionId"] as? String
                             ?? payload?["id"] as? String
                             ?? obj["session_id"] as? String
                             ?? obj["sessionId"] as? String
                             ?? obj["id"] as? String
+                    }
+                    if pendingRiskySkills.isEmpty, pendingForbiddenSkills.isEmpty {
+                        let instructionsText =
+                            payload?["instructions"] as? String
+                                ?? (payload?["base_instructions"] as? [String: Any])?["text"] as? String
+                        if let instructionsText {
+                            let classified = Self.classifySkills(instructionsText)
+                            pendingRiskySkills = classified.risky
+                            pendingForbiddenSkills = classified.forbidden
+                        }
+                    }
+                    if !didAssignSessionSkills {
+                        let tsText = obj["timestamp"] as? String
+                            ?? payload?["timestamp"] as? String
+                        if let tsText,
+                           let dayKey = Self.dayKeyFromTimestamp(tsText) ?? Self.dayKeyFromParsedISO(tsText)
+                        {
+                            assignSessionSkillsIfNeeded(dayKey: dayKey)
+                        }
                     }
                     return
                 }
@@ -330,6 +409,10 @@ enum CostUsageScanner {
                         } else if let info = payload["info"] as? [String: Any], let model = info["model"] as? String {
                             currentModel = model
                         }
+                        currentApprovalPolicy = Self.normalizedContextLabel(payload["approval_policy"] as? String)
+                        currentSandboxMode = Self.codexSandboxMode(from: payload["sandbox_policy"])
+                        currentEffort = Self.codexEffortLevel(from: payload)
+                        assignSessionSkillsIfNeeded(dayKey: dayKey)
                     }
                     return
                 }
@@ -356,35 +439,60 @@ enum CostUsageScanner {
                 var deltaInput = 0
                 var deltaCached = 0
                 var deltaOutput = 0
+                var deltaReasoningOutput = 0
 
                 if let total {
                     let input = toInt(total["input_tokens"])
                     let cached = toInt(total["cached_input_tokens"] ?? total["cache_read_input_tokens"])
                     let output = toInt(total["output_tokens"])
+                    let reasoningOutput = toInt(total["reasoning_output_tokens"] ?? total["reasoning_tokens"])
 
                     let prev = previousTotals
                     deltaInput = max(0, input - (prev?.input ?? 0))
                     deltaCached = max(0, cached - (prev?.cached ?? 0))
                     deltaOutput = max(0, output - (prev?.output ?? 0))
-                    previousTotals = CostUsageCodexTotals(input: input, cached: cached, output: output)
+                    deltaReasoningOutput = max(0, reasoningOutput - (prev?.reasoningOutput ?? 0))
+                    previousTotals = CostUsageCodexTotals(
+                        input: input,
+                        cached: cached,
+                        output: output,
+                        reasoningOutput: reasoningOutput)
                 } else if let last {
                     deltaInput = max(0, toInt(last["input_tokens"]))
                     deltaCached = max(0, toInt(last["cached_input_tokens"] ?? last["cache_read_input_tokens"]))
                     deltaOutput = max(0, toInt(last["output_tokens"]))
+                    deltaReasoningOutput = max(0, toInt(last["reasoning_output_tokens"] ?? last["reasoning_tokens"]))
                 } else {
                     return
                 }
 
-                if deltaInput == 0, deltaCached == 0, deltaOutput == 0 { return }
+                if deltaInput == 0, deltaCached == 0, deltaOutput == 0, deltaReasoningOutput == 0 { return }
                 let cachedClamp = min(deltaCached, deltaInput)
-                add(dayKey: dayKey, model: model, input: deltaInput, cached: cachedClamp, output: deltaOutput)
+                add(
+                    dayKey: dayKey,
+                    model: model,
+                    delta: TokenDelta(
+                        input: deltaInput,
+                        cached: cachedClamp,
+                        output: deltaOutput,
+                        reasoningOutput: deltaReasoningOutput))
+                addContext(
+                    dayKey: dayKey,
+                    approvalPolicy: currentApprovalPolicy,
+                    sandboxMode: currentSandboxMode,
+                    effort: currentEffort)
+                assignSessionSkillsIfNeeded(dayKey: dayKey)
             })) ?? startOffset
 
         return CodexParseResult(
             days: days,
+            codexContextDays: codexContextDays,
             parsedBytes: parsedBytes,
             lastModel: currentModel,
             lastTotals: previousTotals,
+            lastApprovalPolicy: currentApprovalPolicy,
+            lastSandboxMode: currentSandboxMode,
+            lastEffort: currentEffort,
             sessionId: sessionId)
     }
 
@@ -404,6 +512,9 @@ enum CostUsageScanner {
         func dropCachedFile(_ cached: CostUsageFileUsage?) {
             if let cached {
                 Self.applyFileDays(cache: &cache, fileDays: cached.days, sign: -1)
+                if let contextDays = cached.codexContextDays {
+                    Self.applyCodexContextDays(cache: &cache, fileDays: contextDays, sign: -1)
+                }
             }
             cache.files.removeValue(forKey: path)
         }
@@ -444,7 +555,10 @@ enum CostUsageScanner {
                     range: range,
                     startOffset: startOffset,
                     initialModel: cached.lastModel,
-                    initialTotals: cached.lastTotals)
+                    initialTotals: cached.lastTotals,
+                    initialApprovalPolicy: cached.lastApprovalPolicy,
+                    initialSandboxMode: cached.lastSandboxMode,
+                    initialEffort: cached.lastEffort)
                 let sessionId = delta.sessionId ?? cached.sessionId
                 if let sessionId, state.seenSessionIds.contains(sessionId) {
                     dropCachedFile(cached)
@@ -454,16 +568,25 @@ enum CostUsageScanner {
                 if !delta.days.isEmpty {
                     Self.applyFileDays(cache: &cache, fileDays: delta.days, sign: 1)
                 }
+                if !delta.codexContextDays.isEmpty {
+                    Self.applyCodexContextDays(cache: &cache, fileDays: delta.codexContextDays, sign: 1)
+                }
 
                 var mergedDays = cached.days
                 Self.mergeFileDays(existing: &mergedDays, delta: delta.days)
+                var mergedContextDays = cached.codexContextDays ?? [:]
+                Self.mergeCodexContextDays(existing: &mergedContextDays, delta: delta.codexContextDays)
                 cache.files[path] = Self.makeFileUsage(
                     mtimeUnixMs: mtimeMs,
                     size: size,
                     days: mergedDays,
+                    codexContextDays: mergedContextDays.isEmpty ? nil : mergedContextDays,
                     parsedBytes: delta.parsedBytes,
                     lastModel: delta.lastModel,
                     lastTotals: delta.lastTotals,
+                    lastApprovalPolicy: delta.lastApprovalPolicy,
+                    lastSandboxMode: delta.lastSandboxMode,
+                    lastEffort: delta.lastEffort,
                     sessionId: sessionId)
                 if let sessionId {
                     state.seenSessionIds.insert(sessionId)
@@ -477,6 +600,9 @@ enum CostUsageScanner {
 
         if let cached {
             Self.applyFileDays(cache: &cache, fileDays: cached.days, sign: -1)
+            if let contextDays = cached.codexContextDays {
+                Self.applyCodexContextDays(cache: &cache, fileDays: contextDays, sign: -1)
+            }
         }
 
         let parsed = Self.parseCodexFile(fileURL: fileURL, range: range)
@@ -490,12 +616,19 @@ enum CostUsageScanner {
             mtimeUnixMs: mtimeMs,
             size: size,
             days: parsed.days,
+            codexContextDays: parsed.codexContextDays.isEmpty ? nil : parsed.codexContextDays,
             parsedBytes: parsed.parsedBytes,
             lastModel: parsed.lastModel,
             lastTotals: parsed.lastTotals,
+            lastApprovalPolicy: parsed.lastApprovalPolicy,
+            lastSandboxMode: parsed.lastSandboxMode,
+            lastEffort: parsed.lastEffort,
             sessionId: sessionId)
         cache.files[path] = usage
         Self.applyFileDays(cache: &cache, fileDays: usage.days, sign: 1)
+        if let contextDays = usage.codexContextDays {
+            Self.applyCodexContextDays(cache: &cache, fileDays: contextDays, sign: 1)
+        }
         if let sessionId {
             state.seenSessionIds.insert(sessionId)
         }
@@ -542,11 +675,15 @@ enum CostUsageScanner {
             for key in cache.files.keys where !filePathsInScan.contains(key) {
                 if let old = cache.files[key] {
                     Self.applyFileDays(cache: &cache, fileDays: old.days, sign: -1)
+                    if let contextDays = old.codexContextDays {
+                        Self.applyCodexContextDays(cache: &cache, fileDays: contextDays, sign: -1)
+                    }
                 }
                 cache.files.removeValue(forKey: key)
             }
 
             Self.pruneDays(cache: &cache, sinceKey: range.scanSinceKey, untilKey: range.scanUntilKey)
+            Self.pruneCodexContextDays(cache: &cache, sinceKey: range.scanSinceKey, untilKey: range.scanUntilKey)
             cache.lastScanUnixMs = nowMs
             CostUsageCacheIO.save(provider: .codex, cache: cache, cacheRoot: options.cacheRoot)
         }
@@ -562,6 +699,7 @@ enum CostUsageScanner {
         var totalInput = 0
         var totalOutput = 0
         var totalTokens = 0
+        var totalReasoningOutput = 0
         var totalCost: Double = 0
         var costSeen = false
 
@@ -575,26 +713,36 @@ enum CostUsageScanner {
 
             var dayInput = 0
             var dayOutput = 0
+            var dayReasoningOutput = 0
 
             var breakdown: [CostUsageDailyReport.ModelBreakdown] = []
             var dayCost: Double = 0
             var dayCostSeen = false
 
             for model in modelNames {
-                let packed = models[model] ?? [0, 0, 0]
+                let packed = models[model] ?? [0, 0, 0, 0]
                 let input = packed[safe: 0] ?? 0
                 let cached = packed[safe: 1] ?? 0
                 let output = packed[safe: 2] ?? 0
+                let reasoningOutput = packed[safe: 3] ?? 0
 
                 dayInput += input
                 dayOutput += output
+                dayReasoningOutput += reasoningOutput
 
                 let cost = CostUsagePricing.codexCostUSD(
                     model: model,
                     inputTokens: input,
                     cachedInputTokens: cached,
                     outputTokens: output)
-                breakdown.append(CostUsageDailyReport.ModelBreakdown(modelName: model, costUSD: cost))
+                breakdown.append(CostUsageDailyReport.ModelBreakdown(
+                    modelName: model,
+                    costUSD: cost,
+                    inputTokens: input,
+                    outputTokens: output,
+                    cacheReadTokens: cached,
+                    reasoningOutputTokens: reasoningOutput,
+                    totalTokens: input + output))
                 if let cost {
                     dayCost += cost
                     dayCostSeen = true
@@ -602,10 +750,10 @@ enum CostUsageScanner {
             }
 
             breakdown.sort { lhs, rhs in (rhs.costUSD ?? -1) < (lhs.costUSD ?? -1) }
-            let top = Array(breakdown.prefix(3))
 
             let dayTotal = dayInput + dayOutput
             let entryCost = dayCostSeen ? dayCost : nil
+            let context = cache.codexContextDays?[day]
             entries.append(CostUsageDailyReport.Entry(
                 date: day,
                 inputTokens: dayInput,
@@ -613,11 +761,18 @@ enum CostUsageScanner {
                 totalTokens: dayTotal,
                 costUSD: entryCost,
                 modelsUsed: modelNames,
-                modelBreakdowns: top))
+                modelBreakdowns: breakdown.isEmpty ? nil : breakdown,
+                reasoningOutputTokens: dayReasoningOutput > 0 ? dayReasoningOutput : nil,
+                approvalPolicyBreakdowns: Self.countBreakdowns(from: context?.approvalPolicies),
+                sandboxModeBreakdowns: Self.countBreakdowns(from: context?.sandboxModes),
+                effortBreakdowns: Self.countBreakdowns(from: context?.effortLevels),
+                riskySkillBreakdowns: Self.countBreakdowns(from: context?.riskySkills),
+                forbiddenSkillBreakdowns: Self.countBreakdowns(from: context?.forbiddenSkills)))
 
             totalInput += dayInput
             totalOutput += dayOutput
             totalTokens += dayTotal
+            totalReasoningOutput += dayReasoningOutput
             if let entryCost {
                 totalCost += entryCost
                 costSeen = true
@@ -630,7 +785,8 @@ enum CostUsageScanner {
                 totalInputTokens: totalInput,
                 totalOutputTokens: totalOutput,
                 totalTokens: totalTokens,
-                totalCostUSD: costSeen ? totalCost : nil)
+                totalCostUSD: costSeen ? totalCost : nil,
+                totalReasoningOutputTokens: totalReasoningOutput > 0 ? totalReasoningOutput : nil)
 
         return CostUsageDailyReport(data: entries, summary: summary)
     }
@@ -641,18 +797,26 @@ enum CostUsageScanner {
         mtimeUnixMs: Int64,
         size: Int64,
         days: [String: [String: [Int]]],
+        codexContextDays: [String: CostUsageCodexContextDay]? = nil,
         parsedBytes: Int64?,
         lastModel: String? = nil,
         lastTotals: CostUsageCodexTotals? = nil,
+        lastApprovalPolicy: String? = nil,
+        lastSandboxMode: String? = nil,
+        lastEffort: String? = nil,
         sessionId: String? = nil) -> CostUsageFileUsage
     {
         CostUsageFileUsage(
             mtimeUnixMs: mtimeUnixMs,
             size: size,
             days: days,
+            codexContextDays: codexContextDays,
             parsedBytes: parsedBytes,
             lastModel: lastModel,
             lastTotals: lastTotals,
+            lastApprovalPolicy: lastApprovalPolicy,
+            lastSandboxMode: lastSandboxMode,
+            lastEffort: lastEffort,
             sessionId: sessionId)
     }
 
@@ -680,6 +844,25 @@ enum CostUsageScanner {
         }
     }
 
+    static func mergeCodexContextDays(
+        existing: inout [String: CostUsageCodexContextDay],
+        delta: [String: CostUsageCodexContextDay])
+    {
+        for (day, next) in delta {
+            var merged = existing[day] ?? CostUsageCodexContextDay()
+            merged.approvalPolicies = Self.mergeCountMap(merged.approvalPolicies, delta: next.approvalPolicies, sign: 1)
+            merged.sandboxModes = Self.mergeCountMap(merged.sandboxModes, delta: next.sandboxModes, sign: 1)
+            merged.effortLevels = Self.mergeCountMap(merged.effortLevels, delta: next.effortLevels, sign: 1)
+            merged.riskySkills = Self.mergeCountMap(merged.riskySkills, delta: next.riskySkills, sign: 1)
+            merged.forbiddenSkills = Self.mergeCountMap(merged.forbiddenSkills, delta: next.forbiddenSkills, sign: 1)
+            if merged.isEmpty {
+                existing.removeValue(forKey: day)
+            } else {
+                existing[day] = merged
+            }
+        }
+    }
+
     static func applyFileDays(cache: inout CostUsageCache, fileDays: [String: [String: [Int]]], sign: Int) {
         for (day, models) in fileDays {
             var dayModels = cache.days[day] ?? [:]
@@ -701,10 +884,56 @@ enum CostUsageScanner {
         }
     }
 
+    static func applyCodexContextDays(
+        cache: inout CostUsageCache,
+        fileDays: [String: CostUsageCodexContextDay],
+        sign: Int)
+    {
+        var all = cache.codexContextDays ?? [:]
+        for (day, next) in fileDays {
+            var merged = all[day] ?? CostUsageCodexContextDay()
+            merged.approvalPolicies = Self.mergeCountMap(
+                merged.approvalPolicies,
+                delta: next.approvalPolicies,
+                sign: sign)
+            merged.sandboxModes = Self.mergeCountMap(merged.sandboxModes, delta: next.sandboxModes, sign: sign)
+            merged.effortLevels = Self.mergeCountMap(merged.effortLevels, delta: next.effortLevels, sign: sign)
+            merged.riskySkills = Self.mergeCountMap(merged.riskySkills, delta: next.riskySkills, sign: sign)
+            merged.forbiddenSkills = Self.mergeCountMap(merged.forbiddenSkills, delta: next.forbiddenSkills, sign: sign)
+            if merged.isEmpty {
+                all.removeValue(forKey: day)
+            } else {
+                all[day] = merged
+            }
+        }
+        cache.codexContextDays = all.isEmpty ? nil : all
+    }
+
     static func pruneDays(cache: inout CostUsageCache, sinceKey: String, untilKey: String) {
         for key in cache.days.keys where !CostUsageDayRange.isInRange(dayKey: key, since: sinceKey, until: untilKey) {
             cache.days.removeValue(forKey: key)
         }
+    }
+
+    static func pruneCodexContextDays(cache: inout CostUsageCache, sinceKey: String, untilKey: String) {
+        guard var all = cache.codexContextDays else { return }
+        for key in all.keys where !CostUsageDayRange.isInRange(dayKey: key, since: sinceKey, until: untilKey) {
+            all.removeValue(forKey: key)
+        }
+        cache.codexContextDays = all.isEmpty ? nil : all
+    }
+
+    private static func mergeCountMap(_ base: [String: Int], delta: [String: Int], sign: Int) -> [String: Int] {
+        var out = base
+        for (key, value) in delta {
+            let next = (out[key] ?? 0) + sign * max(0, value)
+            if next <= 0 {
+                out.removeValue(forKey: key)
+            } else {
+                out[key] = next
+            }
+        }
+        return out
     }
 
     static func addPacked(a: [Int], b: [Int], sign: Int) -> [Int] {
@@ -715,6 +944,110 @@ enum CostUsageScanner {
             out[idx] = max(0, next)
         }
         return out
+    }
+
+    private static func countBreakdowns(from map: [String: Int]?) -> [CostUsageDailyReport.CountBreakdown]? {
+        guard let map else { return nil }
+        let values = map
+            .compactMap { key, count -> CostUsageDailyReport.CountBreakdown? in
+                let normalized = Self.normalizedContextLabel(key)
+                guard let normalized else { return nil }
+                guard count > 0 else { return nil }
+                return CostUsageDailyReport.CountBreakdown(name: normalized, count: count)
+            }
+            .sorted { lhs, rhs in
+                if lhs.count == rhs.count { return lhs.name < rhs.name }
+                return lhs.count > rhs.count
+            }
+        return values.isEmpty ? nil : values
+    }
+
+    private static func normalizedContextLabel(_ value: String?) -> String? {
+        guard let value else { return nil }
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        if trimmed.count <= 64 { return trimmed }
+        let idx = trimmed.index(trimmed.startIndex, offsetBy: 64)
+        return String(trimmed[..<idx])
+    }
+
+    private static func codexSandboxMode(from raw: Any?) -> String? {
+        if let mode = raw as? String {
+            return self.normalizedContextLabel(mode)
+        }
+        guard let dict = raw as? [String: Any] else { return nil }
+        let mode = dict["mode"] as? String
+            ?? dict["type"] as? String
+        return Self.normalizedContextLabel(mode)
+    }
+
+    private static func codexEffortLevel(from payload: [String: Any]) -> String? {
+        if let effort = payload["effort"] as? String {
+            return self.normalizedContextLabel(effort)
+        }
+        if let collaborationMode = payload["collaboration_mode"] as? [String: Any],
+           let settings = collaborationMode["settings"] as? [String: Any],
+           let effort = settings["reasoning_effort"] as? String
+        {
+            return Self.normalizedContextLabel(effort)
+        }
+        return nil
+    }
+
+    private static let forbiddenSkillKeywords: [String] = [
+        "forbidden",
+        "must not",
+        "do not",
+        "never use",
+        "out of scope",
+        "blocked",
+    ]
+
+    private static let riskySkillKeywords: [String] = [
+        "approval",
+        "private repo",
+        "private repos",
+        "service role",
+        "token",
+        "credential",
+        "install",
+        "notarize",
+        "release",
+        "destructive",
+        "network",
+    ]
+
+    private static func classifySkills(_ text: String) -> (risky: [String: Int], forbidden: [String: Int]) {
+        var risky: [String: Int] = [:]
+        var forbidden: [String: Int] = [:]
+
+        for rawLine in text.split(whereSeparator: \.isNewline) {
+            let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard line.hasPrefix("- ") else { continue }
+            guard line.contains("(file:") else { continue }
+            guard let skill = Self.parseSkillName(from: line) else { continue }
+            let lower = line.lowercased()
+
+            if Self.forbiddenSkillKeywords.contains(where: { lower.contains($0) }) {
+                forbidden[skill] = 1
+            }
+            if Self.riskySkillKeywords.contains(where: { lower.contains($0) }) {
+                risky[skill] = 1
+            }
+        }
+
+        return (risky: risky, forbidden: forbidden)
+    }
+
+    private static func parseSkillName(from line: String) -> String? {
+        guard line.hasPrefix("- ") else { return nil }
+        let trimmed = String(line.dropFirst(2))
+        guard let colon = trimmed.firstIndex(of: ":") else { return nil }
+        let name = trimmed[..<colon].trimmingCharacters(in: .whitespacesAndNewlines)
+        guard name.range(of: #"^[A-Za-z0-9._-]{1,64}$"#, options: .regularExpression) != nil else {
+            return nil
+        }
+        return name
     }
 
     // MARK: - Date parsing
@@ -738,6 +1071,8 @@ enum CostUsageScanner {
         return comps.date
     }
 }
+
+// swiftlint:enable type_body_length
 
 extension Data {
     func containsAscii(_ needle: String) -> Bool {

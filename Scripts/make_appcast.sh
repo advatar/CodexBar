@@ -3,10 +3,11 @@ set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 source "$ROOT/Scripts/lib/load-env.sh"
+source "$ROOT/Scripts/lib/github-defaults.sh"
 load_dotenv_if_present "$ROOT"
 ZIP=${1:?
 "Usage: $0 TeamTokenBar-<ver>.zip"}
-FEED_URL=${2:-"https://raw.githubusercontent.com/steipete/CodexBar/main/appcast.xml"}
+FEED_URL=${2:-${SPARKLE_FEED_URL:-$(sparkle_feed_url "$ROOT")}}
 PRIVATE_KEY_FILE=${SPARKLE_PRIVATE_KEY_FILE:-}
 SPARKLE_CHANNEL=${SPARKLE_CHANNEL:-}
 if [[ -z "$PRIVATE_KEY_FILE" ]]; then
@@ -23,7 +24,7 @@ ZIP_NAME=$(basename "$ZIP")
 ZIP_BASE="${ZIP_NAME%.zip}"
 VERSION=${SPARKLE_RELEASE_VERSION:-}
 if [[ -z "$VERSION" ]]; then
-  if [[ "$ZIP_NAME" =~ ^TeamTokenBar-([0-9]+(\.[0-9]+){1,2}([-.][^.]*)?)\.zip$ ]]; then
+  if [[ "$ZIP_NAME" =~ ^TeamTokenBar-([0-9]+(\.[0-9]+){1,2}([-.][0-9A-Za-z.-]+)?)\.zip$ ]]; then
     VERSION="${BASH_REMATCH[1]}"
   else
     echo "Could not infer version from $ZIP_NAME; set SPARKLE_RELEASE_VERSION." >&2
@@ -49,7 +50,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-DOWNLOAD_URL_PREFIX=${SPARKLE_DOWNLOAD_URL_PREFIX:-"https://github.com/steipete/CodexBar/releases/download/v${VERSION}/"}
+DOWNLOAD_URL_PREFIX=${SPARKLE_DOWNLOAD_URL_PREFIX:-$(sparkle_release_download_prefix "$ROOT" "$VERSION")}
 
 # Sparkle provides generate_appcast; ensure it's on PATH (via SwiftPM build of Sparkle's bin) or Xcode dmg
 if ! command -v generate_appcast >/dev/null; then

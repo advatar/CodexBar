@@ -528,7 +528,14 @@ extension CostUsageScanner {
                         cacheReadInputTokens: cacheRead,
                         cacheCreationInputTokens: cacheCreate,
                         outputTokens: output)
-                breakdown.append(CostUsageDailyReport.ModelBreakdown(modelName: model, costUSD: cost))
+                breakdown.append(CostUsageDailyReport.ModelBreakdown(
+                    modelName: model,
+                    costUSD: cost,
+                    inputTokens: input,
+                    outputTokens: output,
+                    cacheReadTokens: cacheRead,
+                    cacheCreationTokens: cacheCreate,
+                    totalTokens: input + cacheRead + cacheCreate + output))
                 if let cost {
                     dayCost += cost
                     dayCostSeen = true
@@ -536,7 +543,6 @@ extension CostUsageScanner {
             }
 
             breakdown.sort { lhs, rhs in (rhs.costUSD ?? -1) < (lhs.costUSD ?? -1) }
-            let top = Array(breakdown.prefix(3))
 
             let dayTotal = dayInput + dayCacheRead + dayCacheCreate + dayOutput
             let entryCost = dayCostSeen ? dayCost : nil
@@ -549,7 +555,7 @@ extension CostUsageScanner {
                 totalTokens: dayTotal,
                 costUSD: entryCost,
                 modelsUsed: modelNames,
-                modelBreakdowns: top))
+                modelBreakdowns: breakdown.isEmpty ? nil : breakdown))
 
             totalInput += dayInput
             totalOutput += dayOutput

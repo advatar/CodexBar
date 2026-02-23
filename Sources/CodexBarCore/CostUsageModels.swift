@@ -29,11 +29,27 @@ public struct CostUsageDailyReport: Sendable, Decodable {
     public struct ModelBreakdown: Sendable, Decodable, Equatable {
         public let modelName: String
         public let costUSD: Double?
+        public let inputTokens: Int?
+        public let outputTokens: Int?
+        public let cacheReadTokens: Int?
+        public let cacheCreationTokens: Int?
+        public let reasoningOutputTokens: Int?
+        public let totalTokens: Int?
 
         private enum CodingKeys: String, CodingKey {
             case modelName
             case costUSD
             case cost
+            case inputTokens
+            case outputTokens
+            case cacheReadTokens
+            case cacheCreationTokens
+            case cachedInputTokens
+            case cacheReadInputTokens
+            case cacheCreationInputTokens
+            case reasoningOutputTokens
+            case reasoningTokens
+            case totalTokens
         }
 
         public init(from decoder: Decoder) throws {
@@ -42,11 +58,65 @@ public struct CostUsageDailyReport: Sendable, Decodable {
             self.costUSD =
                 try container.decodeIfPresent(Double.self, forKey: .costUSD)
                 ?? container.decodeIfPresent(Double.self, forKey: .cost)
+            self.inputTokens = try container.decodeIfPresent(Int.self, forKey: .inputTokens)
+            self.outputTokens = try container.decodeIfPresent(Int.self, forKey: .outputTokens)
+            self.cacheReadTokens =
+                try container.decodeIfPresent(Int.self, forKey: .cacheReadTokens)
+                ?? container.decodeIfPresent(Int.self, forKey: .cachedInputTokens)
+                ?? container.decodeIfPresent(Int.self, forKey: .cacheReadInputTokens)
+            self.cacheCreationTokens =
+                try container.decodeIfPresent(Int.self, forKey: .cacheCreationTokens)
+                ?? container.decodeIfPresent(Int.self, forKey: .cacheCreationInputTokens)
+            self.reasoningOutputTokens =
+                try container.decodeIfPresent(Int.self, forKey: .reasoningOutputTokens)
+                ?? container.decodeIfPresent(Int.self, forKey: .reasoningTokens)
+            self.totalTokens = try container.decodeIfPresent(Int.self, forKey: .totalTokens)
         }
 
-        public init(modelName: String, costUSD: Double?) {
+        public init(
+            modelName: String,
+            costUSD: Double?,
+            inputTokens: Int? = nil,
+            outputTokens: Int? = nil,
+            cacheReadTokens: Int? = nil,
+            cacheCreationTokens: Int? = nil,
+            reasoningOutputTokens: Int? = nil,
+            totalTokens: Int? = nil)
+        {
             self.modelName = modelName
             self.costUSD = costUSD
+            self.inputTokens = inputTokens
+            self.outputTokens = outputTokens
+            self.cacheReadTokens = cacheReadTokens
+            self.cacheCreationTokens = cacheCreationTokens
+            self.reasoningOutputTokens = reasoningOutputTokens
+            self.totalTokens = totalTokens
+        }
+    }
+
+    public struct CountBreakdown: Sendable, Decodable, Equatable {
+        public let name: String
+        public let count: Int
+
+        private enum CodingKeys: String, CodingKey {
+            case name
+            case key
+            case value
+            case count
+        }
+
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            self.name =
+                try container.decodeIfPresent(String.self, forKey: .name)
+                ?? container.decodeIfPresent(String.self, forKey: .key)
+                ?? container.decode(String.self, forKey: .value)
+            self.count = try max(0, container.decodeIfPresent(Int.self, forKey: .count) ?? 0)
+        }
+
+        public init(name: String, count: Int) {
+            self.name = name
+            self.count = max(0, count)
         }
     }
 
@@ -60,6 +130,12 @@ public struct CostUsageDailyReport: Sendable, Decodable {
         public let costUSD: Double?
         public let modelsUsed: [String]?
         public let modelBreakdowns: [ModelBreakdown]?
+        public let reasoningOutputTokens: Int?
+        public let approvalPolicyBreakdowns: [CountBreakdown]?
+        public let sandboxModeBreakdowns: [CountBreakdown]?
+        public let effortBreakdowns: [CountBreakdown]?
+        public let riskySkillBreakdowns: [CountBreakdown]?
+        public let forbiddenSkillBreakdowns: [CountBreakdown]?
 
         private enum CodingKeys: String, CodingKey {
             case date
@@ -75,6 +151,13 @@ public struct CostUsageDailyReport: Sendable, Decodable {
             case modelsUsed
             case models
             case modelBreakdowns
+            case reasoningOutputTokens
+            case reasoningTokens
+            case approvalPolicyBreakdowns
+            case sandboxModeBreakdowns
+            case effortBreakdowns
+            case riskySkillBreakdowns
+            case forbiddenSkillBreakdowns
         }
 
         public init(from decoder: Decoder) throws {
@@ -94,6 +177,22 @@ public struct CostUsageDailyReport: Sendable, Decodable {
                 ?? container.decodeIfPresent(Double.self, forKey: .totalCost)
             self.modelsUsed = Self.decodeModelsUsed(from: container)
             self.modelBreakdowns = try container.decodeIfPresent([ModelBreakdown].self, forKey: .modelBreakdowns)
+            self.reasoningOutputTokens =
+                try container.decodeIfPresent(Int.self, forKey: .reasoningOutputTokens)
+                ?? container.decodeIfPresent(Int.self, forKey: .reasoningTokens)
+            self.approvalPolicyBreakdowns = try container.decodeIfPresent(
+                [CountBreakdown].self,
+                forKey: .approvalPolicyBreakdowns)
+            self.sandboxModeBreakdowns = try container.decodeIfPresent(
+                [CountBreakdown].self,
+                forKey: .sandboxModeBreakdowns)
+            self.effortBreakdowns = try container.decodeIfPresent([CountBreakdown].self, forKey: .effortBreakdowns)
+            self.riskySkillBreakdowns = try container.decodeIfPresent(
+                [CountBreakdown].self,
+                forKey: .riskySkillBreakdowns)
+            self.forbiddenSkillBreakdowns = try container.decodeIfPresent(
+                [CountBreakdown].self,
+                forKey: .forbiddenSkillBreakdowns)
         }
 
         public init(
@@ -105,7 +204,13 @@ public struct CostUsageDailyReport: Sendable, Decodable {
             totalTokens: Int?,
             costUSD: Double?,
             modelsUsed: [String]?,
-            modelBreakdowns: [ModelBreakdown]?)
+            modelBreakdowns: [ModelBreakdown]?,
+            reasoningOutputTokens: Int? = nil,
+            approvalPolicyBreakdowns: [CountBreakdown]? = nil,
+            sandboxModeBreakdowns: [CountBreakdown]? = nil,
+            effortBreakdowns: [CountBreakdown]? = nil,
+            riskySkillBreakdowns: [CountBreakdown]? = nil,
+            forbiddenSkillBreakdowns: [CountBreakdown]? = nil)
         {
             self.date = date
             self.inputTokens = inputTokens
@@ -116,6 +221,12 @@ public struct CostUsageDailyReport: Sendable, Decodable {
             self.costUSD = costUSD
             self.modelsUsed = modelsUsed
             self.modelBreakdowns = modelBreakdowns
+            self.reasoningOutputTokens = reasoningOutputTokens
+            self.approvalPolicyBreakdowns = approvalPolicyBreakdowns
+            self.sandboxModeBreakdowns = sandboxModeBreakdowns
+            self.effortBreakdowns = effortBreakdowns
+            self.riskySkillBreakdowns = riskySkillBreakdowns
+            self.forbiddenSkillBreakdowns = forbiddenSkillBreakdowns
         }
 
         private static func decodeModelsUsed(from container: KeyedDecodingContainer<CodingKeys>) -> [String]? {
@@ -143,6 +254,7 @@ public struct CostUsageDailyReport: Sendable, Decodable {
         public let cacheCreationTokens: Int?
         public let totalTokens: Int?
         public let totalCostUSD: Double?
+        public let totalReasoningOutputTokens: Int?
 
         private enum CodingKeys: String, CodingKey {
             case totalInputTokens
@@ -154,6 +266,8 @@ public struct CostUsageDailyReport: Sendable, Decodable {
             case totalTokens
             case totalCostUSD
             case totalCost
+            case totalReasoningOutputTokens
+            case reasoningOutputTokens
         }
 
         public init(
@@ -162,7 +276,8 @@ public struct CostUsageDailyReport: Sendable, Decodable {
             cacheReadTokens: Int? = nil,
             cacheCreationTokens: Int? = nil,
             totalTokens: Int?,
-            totalCostUSD: Double?)
+            totalCostUSD: Double?,
+            totalReasoningOutputTokens: Int? = nil)
         {
             self.totalInputTokens = totalInputTokens
             self.totalOutputTokens = totalOutputTokens
@@ -170,6 +285,7 @@ public struct CostUsageDailyReport: Sendable, Decodable {
             self.cacheCreationTokens = cacheCreationTokens
             self.totalTokens = totalTokens
             self.totalCostUSD = totalCostUSD
+            self.totalReasoningOutputTokens = totalReasoningOutputTokens
         }
 
         public init(from decoder: Decoder) throws {
@@ -186,6 +302,9 @@ public struct CostUsageDailyReport: Sendable, Decodable {
             self.totalCostUSD =
                 try container.decodeIfPresent(Double.self, forKey: .totalCostUSD)
                 ?? container.decodeIfPresent(Double.self, forKey: .totalCost)
+            self.totalReasoningOutputTokens =
+                try container.decodeIfPresent(Int.self, forKey: .totalReasoningOutputTokens)
+                ?? container.decodeIfPresent(Int.self, forKey: .reasoningOutputTokens)
         }
     }
 

@@ -15,11 +15,27 @@ struct CostUsageScannerTests {
         let iso2 = env.isoString(for: day.addingTimeInterval(2))
 
         let model = "openai/gpt-5.2-codex"
+        let sessionMeta: [String: Any] = [
+            "type": "session_meta",
+            "timestamp": iso0,
+            "payload": [
+                "id": "sess-001",
+                "instructions": """
+                ## Skills
+                - safe-skill: Basic helper. (file: /tmp/safe/SKILL.md)
+                - risky-skill: Requires explicit approval and private repos. (file: /tmp/risky/SKILL.md)
+                - forbidden-skill: Forbidden by policy. Do not use. (file: /tmp/forbidden/SKILL.md)
+                """,
+            ],
+        ]
         let turnContext: [String: Any] = [
             "type": "turn_context",
             "timestamp": iso0,
             "payload": [
                 "model": model,
+                "approval_policy": "never",
+                "sandbox_policy": ["type": "workspace-write"],
+                "effort": "high",
             ],
         ]
         let firstTokenCount: [String: Any] = [
@@ -32,6 +48,7 @@ struct CostUsageScannerTests {
                         "input_tokens": 100,
                         "cached_input_tokens": 20,
                         "output_tokens": 10,
+                        "reasoning_output_tokens": 5,
                     ],
                     "model": model,
                 ],
@@ -41,7 +58,7 @@ struct CostUsageScannerTests {
         let fileURL = try env.writeCodexSessionFile(
             day: day,
             filename: "session.jsonl",
-            contents: env.jsonl([turnContext, firstTokenCount]))
+            contents: env.jsonl([sessionMeta, turnContext, firstTokenCount]))
 
         var options = CostUsageScanner.Options(
             codexSessionsRoot: env.codexSessionsRoot,
@@ -59,6 +76,14 @@ struct CostUsageScannerTests {
         #expect(first.data[0].modelsUsed == ["gpt-5.2"])
         #expect(first.data[0].totalTokens == 110)
         #expect((first.data[0].costUSD ?? 0) > 0)
+        #expect(first.data[0].reasoningOutputTokens == 5)
+        #expect(first.data[0].approvalPolicyBreakdowns?.first?.name == "never")
+        #expect(first.data[0].approvalPolicyBreakdowns?.first?.count == 1)
+        #expect(first.data[0].sandboxModeBreakdowns?.first?.name == "workspace-write")
+        #expect(first.data[0].effortBreakdowns?.first?.name == "high")
+        #expect(first.data[0].riskySkillBreakdowns?.contains(where: { $0.name == "risky-skill" }) == true)
+        #expect(first.data[0].forbiddenSkillBreakdowns?.contains(where: { $0.name == "forbidden-skill" }) == true)
+        #expect(first.summary?.totalReasoningOutputTokens == 5)
 
         let secondTokenCount: [String: Any] = [
             "type": "event_msg",
@@ -70,12 +95,13 @@ struct CostUsageScannerTests {
                         "input_tokens": 160,
                         "cached_input_tokens": 40,
                         "output_tokens": 16,
+                        "reasoning_output_tokens": 9,
                     ],
                     "model": model,
                 ],
             ],
         ]
-        try env.jsonl([turnContext, firstTokenCount, secondTokenCount])
+        try env.jsonl([sessionMeta, turnContext, firstTokenCount, secondTokenCount])
             .write(to: fileURL, atomically: true, encoding: .utf8)
 
         let second = CostUsageScanner.loadDailyReport(
@@ -87,6 +113,9 @@ struct CostUsageScannerTests {
         #expect(second.data.count == 1)
         #expect(second.data[0].totalTokens == 176)
         #expect((second.data[0].costUSD ?? 0) > (first.data[0].costUSD ?? 0))
+        #expect(second.data[0].reasoningOutputTokens == 9)
+        #expect(second.data[0].approvalPolicyBreakdowns?.first?.count == 2)
+        #expect(second.summary?.totalReasoningOutputTokens == 9)
     }
 
     @Test

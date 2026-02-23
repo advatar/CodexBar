@@ -5,6 +5,7 @@ ALLOW_LLDB=${CODEXBAR_ALLOW_LLDB:-0}
 SIGNING_MODE=${CODEXBAR_SIGNING:-}
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
+source "$ROOT/Scripts/lib/github-defaults.sh"
 
 # Load version info
 source "$ROOT/version.env"
@@ -126,7 +127,7 @@ if [[ -f "$ICON_SOURCE" ]]; then
 fi
 
 BUNDLE_ID="com.steipete.codexbar"
-FEED_URL="https://raw.githubusercontent.com/steipete/CodexBar/main/appcast.xml"
+FEED_URL="${SPARKLE_FEED_URL:-$(sparkle_feed_url "$ROOT")}"
 AUTO_CHECKS=true
 LOWER_CONF=$(printf "%s" "$CONF" | tr '[:upper:]' '[:lower:]')
 if [[ "$LOWER_CONF" == "debug" ]]; then

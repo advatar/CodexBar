@@ -288,7 +288,10 @@
           "items": { "$ref": "#/$defs/costDailyEntry" }
         },
 
-        "totals": { "$ref": "#/$defs/costTotals" }
+        "totals": { "$ref": "#/$defs/costTotals" },
+        "security": { "$ref": "#/$defs/costSecurity" },
+        "thinking": { "$ref": "#/$defs/costThinking" },
+        "modelStats": { "$ref": "#/$defs/costModelStats" }
       }
     },
 
@@ -303,6 +306,7 @@
         "outputTokens": { "type": "integer", "minimum": 0 },
         "cacheReadTokens": { "type": "integer", "minimum": 0 },
         "cacheCreationTokens": { "type": "integer", "minimum": 0 },
+        "reasoningOutputTokens": { "type": "integer", "minimum": 0 },
 
         "totalTokens": { "type": "integer", "minimum": 0 },
         "totalCost": { "type": "number", "minimum": 0 },
@@ -317,9 +321,40 @@
             "required": ["modelName", "cost"],
             "properties": {
               "modelName": { "type": "string", "minLength": 1, "maxLength": 128 },
-              "cost": { "type": "number", "minimum": 0 }
+              "cost": { "type": "number", "minimum": 0 },
+              "inputTokens": { "type": "integer", "minimum": 0 },
+              "outputTokens": { "type": "integer", "minimum": 0 },
+              "cacheReadTokens": { "type": "integer", "minimum": 0 },
+              "cacheCreationTokens": { "type": "integer", "minimum": 0 },
+              "reasoningOutputTokens": { "type": "integer", "minimum": 0 },
+              "totalTokens": { "type": "integer", "minimum": 0 }
             }
           }
+        },
+        "approvalPolicies": {
+          "type": "array",
+          "maxItems": 200,
+          "items": { "$ref": "#/$defs/countBreakdown" }
+        },
+        "sandboxModes": {
+          "type": "array",
+          "maxItems": 200,
+          "items": { "$ref": "#/$defs/countBreakdown" }
+        },
+        "effortLevels": {
+          "type": "array",
+          "maxItems": 200,
+          "items": { "$ref": "#/$defs/countBreakdown" }
+        },
+        "riskySkills": {
+          "type": "array",
+          "maxItems": 200,
+          "items": { "$ref": "#/$defs/countBreakdown" }
+        },
+        "forbiddenSkills": {
+          "type": "array",
+          "maxItems": 200,
+          "items": { "$ref": "#/$defs/countBreakdown" }
         }
       }
     },
@@ -333,8 +368,90 @@
         "outputTokens": { "type": "integer", "minimum": 0 },
         "cacheReadTokens": { "type": "integer", "minimum": 0 },
         "cacheCreationTokens": { "type": "integer", "minimum": 0 },
+        "reasoningOutputTokens": { "type": "integer", "minimum": 0 },
         "totalTokens": { "type": "integer", "minimum": 0 },
         "totalCost": { "type": "number", "minimum": 0 }
+      }
+    },
+
+    "countBreakdown": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "count"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "count": { "type": "integer", "minimum": 0 }
+      }
+    },
+
+    "costSecurity": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "approvalPolicies": {
+          "type": "array",
+          "maxItems": 200,
+          "items": { "$ref": "#/$defs/countBreakdown" }
+        },
+        "sandboxModes": {
+          "type": "array",
+          "maxItems": 200,
+          "items": { "$ref": "#/$defs/countBreakdown" }
+        },
+        "riskySkills": {
+          "type": "array",
+          "maxItems": 200,
+          "items": { "$ref": "#/$defs/countBreakdown" }
+        },
+        "forbiddenSkills": {
+          "type": "array",
+          "maxItems": 200,
+          "items": { "$ref": "#/$defs/countBreakdown" }
+        }
+      }
+    },
+
+    "costThinking": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "reasoningOutputTokens": { "type": "integer", "minimum": 0 },
+        "effortLevels": {
+          "type": "array",
+          "maxItems": 200,
+          "items": { "$ref": "#/$defs/countBreakdown" }
+        }
+      }
+    },
+
+    "costModelStats": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["modelsUsed", "models"],
+      "properties": {
+        "modelsUsed": { "type": "integer", "minimum": 0 },
+        "models": {
+          "type": "array",
+          "maxItems": 200,
+          "items": { "$ref": "#/$defs/costModelUsage" }
+        }
+      }
+    },
+
+    "costModelUsage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["modelName", "totalTokens", "totalCost", "activeDays"],
+      "properties": {
+        "modelName": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "inputTokens": { "type": "integer", "minimum": 0 },
+        "outputTokens": { "type": "integer", "minimum": 0 },
+        "cacheReadTokens": { "type": "integer", "minimum": 0 },
+        "cacheCreationTokens": { "type": "integer", "minimum": 0 },
+        "reasoningOutputTokens": { "type": "integer", "minimum": 0 },
+        "totalTokens": { "type": "integer", "minimum": 0 },
+        "totalCost": { "type": "number", "minimum": 0 },
+        "activeDays": { "type": "integer", "minimum": 0 }
       }
     }
   }

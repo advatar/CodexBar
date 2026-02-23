@@ -72,7 +72,31 @@ struct TeamReportingSanitizerTests {
                     costUSD: nil,
                     modelsUsed: ["gpt-4.1"],
                     modelBreakdowns: [
-                        CostUsageDailyReport.ModelBreakdown(modelName: "gpt-4.1", costUSD: 3.45),
+                        CostUsageDailyReport.ModelBreakdown(
+                            modelName: "gpt-4.1",
+                            costUSD: 3.45,
+                            inputTokens: 100,
+                            outputTokens: 50,
+                            cacheReadTokens: 25,
+                            cacheCreationTokens: 15,
+                            reasoningOutputTokens: 42,
+                            totalTokens: 190),
+                    ],
+                    reasoningOutputTokens: 42,
+                    approvalPolicyBreakdowns: [
+                        CostUsageDailyReport.CountBreakdown(name: "never", count: 3),
+                    ],
+                    sandboxModeBreakdowns: [
+                        CostUsageDailyReport.CountBreakdown(name: "workspace-write", count: 3),
+                    ],
+                    effortBreakdowns: [
+                        CostUsageDailyReport.CountBreakdown(name: "high", count: 3),
+                    ],
+                    riskySkillBreakdowns: [
+                        CostUsageDailyReport.CountBreakdown(name: "gh-fix-ci", count: 1),
+                    ],
+                    forbiddenSkillBreakdowns: [
+                        CostUsageDailyReport.CountBreakdown(name: "unsafe-skill", count: 1),
                     ]),
             ],
             updatedAt: now)
@@ -159,8 +183,17 @@ struct TeamReportingSanitizerTests {
         #expect(decoded.cost?[0].daily?.count == 1)
         #expect(decoded.cost?[0].daily?[0].totalTokens == 190)
         #expect(decoded.cost?[0].daily?[0].totalCost == 3.45)
+        #expect(decoded.cost?[0].daily?[0].reasoningOutputTokens == 42)
         #expect(decoded.cost?[0].totals?.totalTokens == 456)
         #expect(decoded.cost?[0].totals?.totalCost == 4.56)
+        #expect(decoded.cost?[0].totals?.reasoningOutputTokens == 42)
+        #expect(decoded.cost?[0].security?.approvalPolicies?.first?.name == "never")
+        #expect(decoded.cost?[0].security?.sandboxModes?.first?.name == "workspace-write")
+        #expect(decoded.cost?[0].thinking?.reasoningOutputTokens == 42)
+        #expect(decoded.cost?[0].thinking?.effortLevels?.first?.name == "high")
+        #expect(decoded.cost?[0].modelStats?.modelsUsed == 1)
+        #expect(decoded.cost?[0].modelStats?.models.first?.modelName == "gpt-4.1")
+        #expect(decoded.cost?[0].modelStats?.models.first?.totalTokens == 190)
     }
 
     @Test

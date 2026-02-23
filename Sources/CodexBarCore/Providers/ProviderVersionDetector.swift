@@ -28,7 +28,13 @@ public enum ProviderVersionDetector {
         return nil
     }
 
-    private static func run(path: String, args: [String]) -> String? {
+    static func run(
+        path: String,
+        args: [String],
+        timeout: TimeInterval = 2.0,
+        terminateTimeout: TimeInterval = 0.5,
+        killTimeout: TimeInterval = 0.5) -> String?
+    {
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: path)
         proc.arguments = args
@@ -42,27 +48,49 @@ public enum ProviderVersionDetector {
             return nil
         }
 
-        let deadline = Date().addingTimeInterval(2.0)
-        while proc.isRunning, Date() < deadline {
-            usleep(50000)
+        if !Self.waitForExit(process: proc, timeout: timeout) {
+            Self.stop(process: proc, terminateTimeout: terminateTimeout, killTimeout: killTimeout)
         }
+
+        // Ensure process lifetime is fully complete before reading termination status.
         if proc.isRunning {
-            proc.terminate()
-            let killDeadline = Date().addingTimeInterval(0.5)
-            while proc.isRunning, Date() < killDeadline {
-                usleep(20000)
-            }
-            if proc.isRunning {
-                kill(proc.processIdentifier, SIGKILL)
-            }
+            Self.stop(process: proc, terminateTimeout: terminateTimeout, killTimeout: killTimeout)
         }
 
         let data = out.fileHandleForReading.readDataToEndOfFile()
-        guard proc.terminationStatus == 0,
+        guard !proc.isRunning,
+              proc.terminationStatus == 0,
               let text = String(data: data, encoding: .utf8)?
                   .split(whereSeparator: \.isNewline).first
         else { return nil }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private static func waitForExit(process: Process, timeout: TimeInterval) -> Bool {
+        let deadline = Date().addingTimeInterval(max(0, timeout))
+        while process.isRunning, Date() < deadline {
+            usleep(50000)
+        }
+        return !process.isRunning
+    }
+
+    private static func stop(process: Process, terminateTimeout: TimeInterval, killTimeout: TimeInterval) {
+        guard process.isRunning else { return }
+
+        process.terminate()
+        if self.waitForExit(process: process, timeout: terminateTimeout) {
+            return
+        }
+
+        if process.processIdentifier > 0 {
+            _ = kill(process.processIdentifier, SIGKILL)
+        }
+        if self.waitForExit(process: process, timeout: killTimeout) {
+            return
+        }
+
+        // Last resort to avoid deallocation while still running.
+        process.waitUntilExit()
     }
 }

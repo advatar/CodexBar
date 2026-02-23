@@ -53,6 +53,9 @@ struct CostUsageCache: Codable, Sendable {
     /// dayKey -> model -> packed usage
     var days: [String: [String: [Int]]] = [:]
 
+    /// Codex-only context counters aggregated by day.
+    var codexContextDays: [String: CostUsageCodexContextDay]?
+
     /// rootPath -> mtime (for Claude roots)
     var roots: [String: Int64]?
 }
@@ -61,14 +64,57 @@ struct CostUsageFileUsage: Codable, Sendable {
     var mtimeUnixMs: Int64
     var size: Int64
     var days: [String: [String: [Int]]]
+    var codexContextDays: [String: CostUsageCodexContextDay]?
     var parsedBytes: Int64?
     var lastModel: String?
     var lastTotals: CostUsageCodexTotals?
+    var lastApprovalPolicy: String?
+    var lastSandboxMode: String?
+    var lastEffort: String?
     var sessionId: String?
+}
+
+struct CostUsageCodexContextDay: Codable, Sendable {
+    var approvalPolicies: [String: Int] = [:]
+    var sandboxModes: [String: Int] = [:]
+    var effortLevels: [String: Int] = [:]
+    var riskySkills: [String: Int] = [:]
+    var forbiddenSkills: [String: Int] = [:]
+
+    var isEmpty: Bool {
+        self.approvalPolicies.isEmpty
+            && self.sandboxModes.isEmpty
+            && self.effortLevels.isEmpty
+            && self.riskySkills.isEmpty
+            && self.forbiddenSkills.isEmpty
+    }
 }
 
 struct CostUsageCodexTotals: Codable, Sendable {
     var input: Int
     var cached: Int
     var output: Int
+    var reasoningOutput: Int
+
+    private enum CodingKeys: String, CodingKey {
+        case input
+        case cached
+        case output
+        case reasoningOutput
+    }
+
+    init(input: Int, cached: Int, output: Int, reasoningOutput: Int = 0) {
+        self.input = input
+        self.cached = cached
+        self.output = output
+        self.reasoningOutput = max(0, reasoningOutput)
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.input = try container.decode(Int.self, forKey: .input)
+        self.cached = try container.decode(Int.self, forKey: .cached)
+        self.output = try container.decode(Int.self, forKey: .output)
+        self.reasoningOutput = try max(0, container.decodeIfPresent(Int.self, forKey: .reasoningOutput) ?? 0)
+    }
 }

@@ -116,6 +116,11 @@ xcrun stapler staple "$DMG_NAME"
 xcrun stapler validate "$DMG_NAME"
 spctl -a -t open --context context:primary-signature -vv "$DMG_NAME"
 
+if [[ "${SKIP_PIGGYBANK_UPDATE:-0}" != "1" ]]; then
+  echo "Updating thepiggybank download URL"
+  ./Scripts/update_thepiggybank_download_url.sh
+fi
+
 echo "Packaging dSYM"
 FIRST_ARCH="${ARCH_LIST[0]}"
 PREFERRED_ARCH_DIR=".build/${FIRST_ARCH}-apple-macosx/release"

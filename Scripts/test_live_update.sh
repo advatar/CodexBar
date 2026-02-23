@@ -5,10 +5,11 @@ PREV_TAG=${1:?"pass previous release tag (e.g. v0.1.0)"}
 CUR_TAG=${2:?"pass current release tag (e.g. v0.1.1)"}
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
+source "$ROOT/Scripts/lib/github-defaults.sh"
 PREV_VER=${PREV_TAG#v}
 APP_NAME="TeamTokenBar"
 
-ZIP_URL="https://github.com/steipete/CodexBar/releases/download/${PREV_TAG}/${APP_NAME}-${PREV_VER}.zip"
+ZIP_URL="${SPARKLE_DOWNLOAD_URL_PREFIX:-$(sparkle_release_download_prefix "$ROOT" "$PREV_VER")}${APP_NAME}-${PREV_VER}.zip"
 TMP_DIR=$(mktemp -d /tmp/codexbar-live.XXXX)
 trap 'rm -rf "$TMP_DIR"' EXIT
 
