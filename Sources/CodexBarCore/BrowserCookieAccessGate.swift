@@ -8,11 +8,14 @@ public enum BrowserCookieAccessGate {
     private struct State {
         var loaded = false
         var deniedUntilByBrowser: [String: Date] = [:]
+        var attemptedAtByBrowser: [String: Date] = [:]
     }
 
     private static let lock = OSAllocatedUnfairLock<State>(initialState: State())
-    private static let defaultsKey = "browserCookieAccessDeniedUntil"
-    private static let cooldownInterval: TimeInterval = 60 * 60 * 6
+    private static let deniedDefaultsKey = "browserCookieAccessDeniedUntil"
+    private static let attemptedDefaultsKey = "browserCookieAccessAttemptedAt"
+    private static let denyCooldownInterval: TimeInterval = 60 * 60 * 6
+    private static let attemptCooldownInterval: TimeInterval = 60 * 30
     private static let log = CodexBarLog.logger(LogCategories.browserCookieGate)
 
     public static func shouldAttempt(_ browser: Browser, now: Date = Date()) -> Bool {
@@ -30,15 +33,40 @@ public enum BrowserCookieAccessGate {
                 state.deniedUntilByBrowser.removeValue(forKey: browser.rawValue)
                 self.persist(state)
             }
-            if self.chromiumKeychainRequiresInteraction() {
-                state.deniedUntilByBrowser[browser.rawValue] = now.addingTimeInterval(self.cooldownInterval)
+            if let attemptedAt = state.attemptedAtByBrowser[browser.rawValue],
+               now.timeIntervalSince(attemptedAt) < self.attemptCooldownInterval
+            {
+                let nextAttempt = attemptedAt.addingTimeInterval(self.attemptCooldownInterval)
+                self.log.debug(
+                    "Cookie access attempt throttled",
+                    metadata: [
+                        "browser": browser.displayName,
+                        "until": "\(nextAttempt.timeIntervalSince1970)",
+                    ])
+                return false
+            }
+            if self.browserKeychainRequiresInteraction(browser) {
+                let blockedUntil = now.addingTimeInterval(self.denyCooldownInterval)
+                state.deniedUntilByBrowser[browser.rawValue] = blockedUntil
+                state.attemptedAtByBrowser[browser.rawValue] = now
                 self.persist(state)
                 self.log.info(
                     "Cookie access requires keychain interaction; suppressing",
-                    metadata: ["browser": browser.displayName])
+                    metadata: [
+                        "browser": browser.displayName,
+                        "until": "\(blockedUntil.timeIntervalSince1970)",
+                    ])
                 return false
             }
-            self.log.debug("Cookie access allowed", metadata: ["browser": browser.displayName])
+            let nextAttempt = now.addingTimeInterval(self.attemptCooldownInterval)
+            state.attemptedAtByBrowser[browser.rawValue] = now
+            self.persist(state)
+            self.log.debug(
+                "Cookie access allowed",
+                metadata: [
+                    "browser": browser.displayName,
+                    "nextAttemptAt": "\(nextAttempt.timeIntervalSince1970)",
+                ])
             return true
         }
     }
@@ -51,10 +79,11 @@ public enum BrowserCookieAccessGate {
 
     public static func recordDenied(for browser: Browser, now: Date = Date()) {
         guard browser.usesKeychainForCookieDecryption else { return }
-        let blockedUntil = now.addingTimeInterval(self.cooldownInterval)
+        let blockedUntil = now.addingTimeInterval(self.denyCooldownInterval)
         self.lock.withLock { state in
             self.loadIfNeeded(&state)
             state.deniedUntilByBrowser[browser.rawValue] = blockedUntil
+            state.attemptedAtByBrowser[browser.rawValue] = now
             self.persist(state)
         }
         self.log
@@ -70,12 +99,16 @@ public enum BrowserCookieAccessGate {
         self.lock.withLock { state in
             state.loaded = true
             state.deniedUntilByBrowser.removeAll()
-            UserDefaults.standard.removeObject(forKey: self.defaultsKey)
+            state.attemptedAtByBrowser.removeAll()
+            UserDefaults.standard.removeObject(forKey: self.deniedDefaultsKey)
+            UserDefaults.standard.removeObject(forKey: self.attemptedDefaultsKey)
         }
     }
 
-    private static func chromiumKeychainRequiresInteraction() -> Bool {
-        for label in self.safeStorageLabels {
+    private static func browserKeychainRequiresInteraction(_ browser: Browser) -> Bool {
+        let labels = self.safeStorageLabels(for: browser)
+        guard !labels.isEmpty else { return false }
+        for label in labels {
             switch KeychainAccessPreflight.checkGenericPassword(service: label.service, account: label.account) {
             case .allowed:
                 return false
@@ -88,20 +121,45 @@ public enum BrowserCookieAccessGate {
         return false
     }
 
-    private static let safeStorageLabels: [(service: String, account: String)] = Browser.safeStorageLabels
+    private static func safeStorageLabels(for browser: Browser) -> [(service: String, account: String)] {
+        let direct = browser.safeStorageLabels
+        if !direct.isEmpty { return direct }
+        switch browser {
+        case .chromeBeta, .chromeCanary:
+            return Browser.chrome.safeStorageLabels
+        case .braveBeta, .braveNightly:
+            return Browser.brave.safeStorageLabels
+        case .edgeBeta, .edgeCanary:
+            return Browser.edge.safeStorageLabels
+        default:
+            return []
+        }
+    }
 
     private static func loadIfNeeded(_ state: inout State) {
         guard !state.loaded else { return }
         state.loaded = true
-        guard let raw = UserDefaults.standard.dictionary(forKey: self.defaultsKey) as? [String: Double] else {
-            return
+        if let deniedRaw = UserDefaults.standard.dictionary(forKey: self.deniedDefaultsKey) as? [String: Double] {
+            state.deniedUntilByBrowser = deniedRaw.compactMapValues { Date(timeIntervalSince1970: $0) }
         }
-        state.deniedUntilByBrowser = raw.compactMapValues { Date(timeIntervalSince1970: $0) }
+        if let attemptedRaw = UserDefaults.standard.dictionary(forKey: self.attemptedDefaultsKey) as? [String: Double] {
+            state.attemptedAtByBrowser = attemptedRaw.compactMapValues { Date(timeIntervalSince1970: $0) }
+        }
     }
 
     private static func persist(_ state: State) {
-        let raw = state.deniedUntilByBrowser.mapValues { $0.timeIntervalSince1970 }
-        UserDefaults.standard.set(raw, forKey: self.defaultsKey)
+        let deniedRaw = state.deniedUntilByBrowser.mapValues { $0.timeIntervalSince1970 }
+        if deniedRaw.isEmpty {
+            UserDefaults.standard.removeObject(forKey: self.deniedDefaultsKey)
+        } else {
+            UserDefaults.standard.set(deniedRaw, forKey: self.deniedDefaultsKey)
+        }
+        let attemptedRaw = state.attemptedAtByBrowser.mapValues { $0.timeIntervalSince1970 }
+        if attemptedRaw.isEmpty {
+            UserDefaults.standard.removeObject(forKey: self.attemptedDefaultsKey)
+        } else {
+            UserDefaults.standard.set(attemptedRaw, forKey: self.attemptedDefaultsKey)
+        }
     }
 }
 #else

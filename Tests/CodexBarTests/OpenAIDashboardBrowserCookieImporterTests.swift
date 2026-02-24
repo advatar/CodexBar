@@ -1,5 +1,5 @@
-import CodexBarCore
 import Testing
+@testable import CodexBarCore
 
 @Suite
 struct OpenAIDashboardBrowserCookieImporterTests {
@@ -14,4 +14,18 @@ struct OpenAIDashboardBrowserCookieImporterTests {
         #expect(msg.contains("Safari=a@example.com"))
         #expect(msg.contains("Chrome=b@example.com"))
     }
+
+    #if os(macOS)
+    @Test
+    func limitsToSingleKeychainBrowserPerPass() {
+        let limited = OpenAIDashboardBrowserCookieImporter.limitToSingleKeychainBrowserPerPass([
+            .safari,
+            .chrome,
+            .edge,
+            .firefox,
+            .arc,
+        ])
+        #expect(limited == [.safari, .chrome, .firefox])
+    }
+    #endif
 }

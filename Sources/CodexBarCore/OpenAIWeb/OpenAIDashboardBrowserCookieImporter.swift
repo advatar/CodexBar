@@ -136,8 +136,14 @@ public struct OpenAIDashboardBrowserCookieImporter {
             }
         }
 
-        // Filter to cookie-eligible browsers to avoid unnecessary keychain prompts
-        let installedBrowsers = Self.cookieImportOrder.cookieImportCandidates(using: self.browserDetection)
+        // Filter to cookie-eligible browsers to avoid unnecessary keychain prompts.
+        // Also limit each import pass to at most one keychain-backed browser to prevent multiple
+        // macOS credential prompts in a single refresh cycle.
+        let candidateBrowsers = Self.cookieImportOrder.cookieImportCandidates(using: self.browserDetection)
+        let installedBrowsers = Self.limitToSingleKeychainBrowserPerPass(candidateBrowsers)
+        if installedBrowsers.count < candidateBrowsers.count {
+            log("Limiting keychain-backed browser attempts this pass (\(installedBrowsers.shortLabel))")
+        }
         for browserSource in installedBrowsers {
             if let match = await self.trySource(
                 browserSource,
@@ -386,6 +392,20 @@ public struct OpenAIDashboardBrowserCookieImporter {
         default:
             nil
         }
+    }
+
+    nonisolated static func limitToSingleKeychainBrowserPerPass(_ browsers: [Browser]) -> [Browser] {
+        var selected: [Browser] = []
+        selected.reserveCapacity(browsers.count)
+        var includedKeychainBrowser = false
+        for browser in browsers {
+            if browser.usesKeychainForCookieDecryption {
+                if includedKeychainBrowser { continue }
+                includedKeychainBrowser = true
+            }
+            selected.append(browser)
+        }
+        return selected
     }
 
     private func applyCandidate(

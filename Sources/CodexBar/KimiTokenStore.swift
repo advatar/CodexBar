@@ -27,11 +27,39 @@ struct KeychainKimiTokenStore: KimiTokenStoring {
     private let service = "com.steipete.CodexBar"
     private let account = "kimi-auth-token"
 
+    // Cache/cooldown to reduce repeated keychain prompts during refresh loops.
+    private nonisolated(unsafe) static var cachedToken: String?
+    private nonisolated(unsafe) static var cacheTimestamp: Date?
+    private nonisolated(unsafe) static var deniedUntil: Date?
+    private static let cacheLock = NSLock()
+    private static let cacheTTL: TimeInterval = 1800 // 30 minutes
+    private static let promptCooldown: TimeInterval = 60 * 60 * 6 // 6 hours
+
     func loadToken() throws -> String? {
         guard !KeychainAccessGate.isDisabled else {
             Self.log.debug("Keychain access disabled; skipping token load")
             return nil
         }
+        let now = Date()
+        Self.cacheLock.lock()
+        if let timestamp = Self.cacheTimestamp,
+           now.timeIntervalSince(timestamp) < Self.cacheTTL
+        {
+            let cached = Self.cachedToken
+            Self.cacheLock.unlock()
+            Self.log.debug("Using cached Kimi token")
+            return cached
+        }
+        if let deniedUntil = Self.deniedUntil {
+            if deniedUntil > now {
+                Self.cacheLock.unlock()
+                Self.log.debug("Skipping Kimi keychain read during prompt cooldown")
+                return nil
+            }
+            Self.deniedUntil = nil
+        }
+        Self.cacheLock.unlock()
+
         var result: CFTypeRef?
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
@@ -52,6 +80,13 @@ struct KeychainKimiTokenStore: KimiTokenStoring {
 
         let status = SecItemCopyMatching(query as CFDictionary, &result)
         if status == errSecItemNotFound {
+            Self.cache(token: nil, now: now)
+            return nil
+        }
+        if Self.isPromptDeniedStatus(status) {
+            Self.recordDenied(now: now)
+            Self.cache(token: nil, now: now)
+            Self.log.info("Kimi keychain access denied; suppressing prompts during cooldown")
             return nil
         }
         guard status == errSecSuccess else {
@@ -63,10 +98,9 @@ struct KeychainKimiTokenStore: KimiTokenStoring {
             throw KimiTokenStoreError.invalidData
         }
         let token = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let token, !token.isEmpty {
-            return token
-        }
-        return nil
+        let finalToken = token?.isEmpty == false ? token : nil
+        Self.cache(token: finalToken, now: now)
+        return finalToken
     }
 
     func storeToken(_ token: String?) throws {
@@ -93,6 +127,8 @@ struct KeychainKimiTokenStore: KimiTokenStoring {
 
         let updateStatus = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
         if updateStatus == errSecSuccess {
+            Self.cache(token: cleaned, now: Date())
+            Self.clearDenied()
             return
         }
         if updateStatus != errSecItemNotFound {
@@ -109,6 +145,8 @@ struct KeychainKimiTokenStore: KimiTokenStoring {
             Self.log.error("Keychain add failed: \(addStatus)")
             throw KimiTokenStoreError.keychainStatus(addStatus)
         }
+        Self.cache(token: cleaned, now: Date())
+        Self.clearDenied()
     }
 
     private func deleteTokenIfPresent() throws {
@@ -120,9 +158,37 @@ struct KeychainKimiTokenStore: KimiTokenStoring {
         ]
         let status = SecItemDelete(query as CFDictionary)
         if status == errSecSuccess || status == errSecItemNotFound {
+            Self.cache(token: nil, now: Date())
+            Self.clearDenied()
             return
         }
         Self.log.error("Keychain delete failed: \(status)")
         throw KimiTokenStoreError.keychainStatus(status)
+    }
+
+    private static func cache(token: String?, now: Date) {
+        self.cacheLock.lock()
+        self.cachedToken = token
+        self.cacheTimestamp = now
+        self.cacheLock.unlock()
+    }
+
+    private static func recordDenied(now: Date) {
+        self.cacheLock.lock()
+        self.deniedUntil = now.addingTimeInterval(self.promptCooldown)
+        self.cacheLock.unlock()
+    }
+
+    private static func clearDenied() {
+        self.cacheLock.lock()
+        self.deniedUntil = nil
+        self.cacheLock.unlock()
+    }
+
+    private static func isPromptDeniedStatus(_ status: OSStatus) -> Bool {
+        status == errSecUserCanceled
+            || status == errSecAuthFailed
+            || status == errSecInteractionNotAllowed
+            || status == errSecNoAccessForItem
     }
 }
